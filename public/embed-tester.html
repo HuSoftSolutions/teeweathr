@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TeeWeathr — embed tester</title>
+<meta name="robots" content="noindex" />
+<style>
+  :root {
+    --bg: #fafaf9;
+    --panel: #ffffff;
+    --line: #e4e4e7;
+    --line-2: #d4d4d8;
+    --text: #18181b;
+    --muted: #71717a;
+    --accent: #059669;
+    --accent-hover: #047857;
+    --code-bg: #18181b;
+    --code-text: #e4e4e7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 20px 80px; }
+  header { margin-bottom: 28px; }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 14px; max-width: 640px; line-height: 1.5; }
+  .host-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 10px; font-size: 12px;
+    color: var(--muted); font-family: "SF Mono", ui-monospace, monospace;
+    margin-top: 10px;
+  }
+  .host-pill strong { color: var(--text); font-weight: 600; }
+
+  .instructions {
+    margin: 20px 0 32px;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #3f3f46;
+  }
+  .instructions strong { color: #18181b; }
+  .instructions code {
+    font-family: "SF Mono", ui-monospace, monospace;
+    background: #f4f4f5; padding: 1px 6px; border-radius: 4px;
+    font-size: 12px;
+  }
+  .instructions ol { margin: 8px 0 0; padding-left: 18px; }
+  .instructions li { margin-bottom: 4px; }
+
+  .grid { display: grid; gap: 24px; grid-template-columns: 1fr; }
+  @media (min-width: 880px) { .grid { grid-template-columns: 1fr 1fr; } }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .card-head .title { font-size: 13px; font-weight: 600; color: #18181b; }
+  .card-head .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .badges { display: flex; gap: 4px; flex-wrap: wrap; }
+  .badge {
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 2px 7px; border-radius: 4px;
+    background: #f4f4f5; color: #52525b;
+  }
+  .badge.dark  { background: #18181b; color: #fafaf9; }
+  .badge.light { background: #fafaf9; color: #18181b; border: 1px solid #e4e4e7; }
+  .badge.green   { background: #d1fae5; color: #047857; }
+  .badge.blue    { background: #dbeafe; color: #1d4ed8; }
+  .badge.purple  { background: #ede9fe; color: #6d28d9; }
+  .badge.orange  { background: #ffedd5; color: #c2410c; }
+  .badge.red     { background: #fee2e2; color: #b91c1c; }
+  .badge.zinc    { background: #e4e4e7; color: #3f3f46; }
+  .badge.ads     { background: #fef3c7; color: #92400e; }
+
+  .preview {
+    padding: 20px;
+    background: repeating-conic-gradient(#f4f4f5 0% 25%, #fafaf9 0% 50%) 50% / 16px 16px;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 140px;
+  }
+  .preview iframe {
+    border: 0;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
+  }
+
+  .snippet {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 14px 16px 16px;
+    font-family: "SF Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    line-height: 1.55;
+    white-space: pre;
+    overflow-x: auto;
+    position: relative;
+  }
+  .snippet-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #09090b; color: #a1a1aa;
+    padding: 8px 14px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    font-family: -apple-system, sans-serif; font-weight: 600;
+  }
+  .copy-btn {
+    border: 0;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px; font-weight: 600;
+    padding: 5px 10px; border-radius: 5px;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: normal;
+    font-family: inherit;
+  }
+  .copy-btn:hover { background: var(--accent-hover); }
+  .copy-btn.copied { background: #15803d; }
+
+  .footer-note {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .footer-note code {
+    font-family: "SF Mono", ui-monospace, monospace;
+    background: #f4f4f5; padding: 1px 6px; border-radius: 4px;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>TeeWeathr — embed tester</h1>
+    <p class="lede">
+      Live preview of every meaningful widget variant. Each card has a copy-paste <code>&lt;iframe&gt;</code> ready for Wix or any other site builder. Snippets are auto-filled with this page&rsquo;s URL — no manual editing.
+    </p>
+    <div class="host-pill">
+      Host: <strong id="host">—</strong>
+    </div>
+  </header>
+
+  <div class="instructions">
+    <strong>To test on Wix:</strong>
+    <ol>
+      <li>Make sure the dev server is running (<code>npm run dev</code>).</li>
+      <li>Expose it publicly: <code>ngrok http 3000</code> (or <code>cloudflared tunnel --url http://localhost:3000</code>, or push a branch for a Vercel preview URL).</li>
+      <li>Open this same page on the public URL — e.g. <code>https://your-tunnel.ngrok.io/embed-tester.html</code> — so the snippets below auto-fill with that host.</li>
+      <li>In Wix: <em>Add &rarr; Embed Code &rarr; Custom Embeds &rarr; Embed HTML</em>. Click <strong>Copy snippet</strong> below and paste it into the embed dialog.</li>
+    </ol>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <p class="footer-note">
+    Default demo course is Pebble Beach Golf Links. Change <code>lat</code>, <code>lon</code>, <code>name</code>, <code>holes</code>, <code>par</code> in the snippet to point at any course. Available URL params: <code>theme</code> (dark|light), <code>accent</code> (default|blue|purple|red|orange|zinc), <code>branding</code> (true|false), <code>ads</code> (true|false). When using a real <code>key</code>, all of these become server-controlled and URL params are ignored.
+  </p>
+</div>
+
+<script>
+  const HOST = window.location.origin;
+  document.getElementById("host").textContent = HOST;
+
+  // Default demo course — Pebble Beach Golf Links
+  const COURSE = {
+    lat: 36.5685,
+    lon: -121.9460,
+    name: "Pebble Beach Golf Links",
+    holes: 18,
+    par: 72,
+  };
+
+  // Variants — curated to cover the size × theme × accent × ads/branding matrix
+  const VARIANTS = [
+    {
+      title: "Badge — header strip",
+      sub: "Drop in a site header or top nav. Free tier, ad-supported.",
+      width: 320, height: 80,
+      params: { theme: "dark", accent: "default", ads: true, branding: true },
+      badges: ["dark", "green", "ads"],
+    },
+    {
+      title: "Badge — Pro, light",
+      sub: "Pro tier: ad-free, branded subtle, light theme.",
+      width: 320, height: 80,
+      params: { theme: "light", accent: "default", ads: false, branding: true },
+      badges: ["light", "green"],
+    },
+    {
+      title: "Compact — sidebar (Free)",
+      sub: "Course profile sidebar. Ad on, default green accent.",
+      width: 320, height: 280,
+      params: { theme: "dark", accent: "default", ads: true, branding: true },
+      badges: ["dark", "green", "ads"],
+    },
+    {
+      title: "Compact — sidebar (Pro, custom blue)",
+      sub: "Branded for a course whose accent is blue.",
+      width: 320, height: 280,
+      params: { theme: "light", accent: "blue", ads: false, branding: true },
+      badges: ["light", "blue"],
+    },
+    {
+      title: "Medium — card",
+      sub: "Inline card. Dark, default green, ad on (Free tier).",
+      width: 400, height: 440,
+      params: { theme: "dark", accent: "default", ads: true, branding: true },
+      badges: ["dark", "green", "ads"],
+    },
+    {
+      title: "Medium — card (Pro, orange)",
+      sub: "Pro tier, light theme, orange accent — for resort-style brand palettes.",
+      width: 400, height: 440,
+      params: { theme: "light", accent: "orange", ads: false, branding: true },
+      badges: ["light", "orange"],
+    },
+    {
+      title: "Full — booking page",
+      sub: "Full forecast for tee-time pages. Dark, ad-free.",
+      width: 500, height: 640,
+      params: { theme: "dark", accent: "default", ads: false, branding: true },
+      badges: ["dark", "green"],
+    },
+    {
+      title: "Full — white-label (Enterprise)",
+      sub: "Branding off, custom purple accent, light. Looks fully native.",
+      width: 500, height: 640,
+      params: { theme: "light", accent: "purple", ads: false, branding: false },
+      badges: ["light", "purple"],
+    },
+  ];
+
+  function buildUrl(params) {
+    const q = new URLSearchParams({
+      lat: COURSE.lat.toString(),
+      lon: COURSE.lon.toString(),
+      name: COURSE.name,
+      holes: COURSE.holes.toString(),
+      par: COURSE.par.toString(),
+      ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
+    });
+    return HOST + "/embed?" + q.toString();
+  }
+
+  function buildSnippet(url, w, h) {
+    return [
+      '<iframe',
+      '  src="' + url + '"',
+      '  width="' + w + '" height="' + h + '"',
+      '  style="border:0; border-radius:12px; max-width:100%"',
+      '  loading="lazy"',
+      '  title="TeeWeathr golf weather widget"',
+      '></iframe>',
+    ].join("\n");
+  }
+
+  function badgeEl(label) {
+    const span = document.createElement("span");
+    span.className = "badge " + label;
+    span.textContent = label === "ads" ? "Ad" : label;
+    return span;
+  }
+
+  function makeCard(v) {
+    const url = buildUrl(v.params);
+    const snippet = buildSnippet(url, v.width, v.height);
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-head">
+        <div>
+          <div class="title">${v.title}</div>
+          <div class="sub">${v.sub}</div>
+        </div>
+        <div class="badges"></div>
+      </div>
+      <div class="preview"></div>
+      <div class="snippet-bar">
+        <span>iframe snippet · ${v.width}×${v.height}</span>
+        <button class="copy-btn" type="button">Copy snippet</button>
+      </div>
+      <pre class="snippet"></pre>
+    `;
+    const badges = card.querySelector(".badges");
+    v.badges.forEach((b) => badges.appendChild(badgeEl(b)));
+
+    const preview = card.querySelector(".preview");
+    const iframe = document.createElement("iframe");
+    iframe.src = url;
+    iframe.width = v.width;
+    iframe.height = v.height;
+    iframe.loading = "lazy";
+    iframe.title = v.title;
+    preview.appendChild(iframe);
+
+    card.querySelector(".snippet").textContent = snippet;
+
+    const btn = card.querySelector(".copy-btn");
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(snippet);
+        const orig = btn.textContent;
+        btn.textContent = "Copied ✓";
+        btn.classList.add("copied");
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove("copied");
+        }, 1400);
+      } catch {
+        // Fallback: select the snippet text
+        const range = document.createRange();
+        range.selectNode(card.querySelector(".snippet"));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+      }
+    });
+
+    return card;
+  }
+
+  const grid = document.getElementById("grid");
+  VARIANTS.forEach((v) => grid.appendChild(makeCard(v)));
+</script>
+</body>
+</html>
