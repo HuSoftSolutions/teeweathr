@@ -237,11 +237,11 @@ function CourseSearch({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const tooShort = query.trim().length < 2;
+  const visibleResults = tooShort ? [] : results;
+
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([]);
-      return;
-    }
+    if (tooShort) return;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setSearching(true);
@@ -257,7 +257,7 @@ function CourseSearch({
         .finally(() => setSearching(false));
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [query, userLocation]);
+  }, [query, userLocation, tooShort]);
 
   return (
     <div className="relative">
@@ -282,7 +282,7 @@ function CourseSearch({
         )}
       </div>
 
-      {open && (query.length >= 2 || results.length > 0) && (
+      {open && (query.length >= 2 || visibleResults.length > 0) && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 right-0 mt-2 z-20 rounded-2xl border border-zinc-200 bg-white shadow-lg max-h-72 overflow-y-auto">
@@ -291,11 +291,11 @@ function CourseSearch({
                 <Loader2 className="h-4 w-4 animate-spin" /> Searching...
               </div>
             )}
-            {!searching && query.length >= 2 && results.length === 0 && (
+            {!searching && query.length >= 2 && visibleResults.length === 0 && (
               <p className="py-6 text-center text-sm text-zinc-400">No courses found</p>
             )}
             {!searching &&
-              results.map((c) => (
+              visibleResults.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => {

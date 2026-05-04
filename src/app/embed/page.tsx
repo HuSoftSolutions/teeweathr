@@ -354,7 +354,6 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   }, [todayStr]);
 
   const fetchWeather = useCallback(async () => {
-    if (!lat || !lon) { setError("Missing lat/lon"); setLoading(false); return; }
     try {
       const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
       if (!res.ok) throw new Error();
@@ -368,7 +367,13 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
     finally { setLoading(false); }
   }, [lat, lon, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { fetchWeather(); }, [fetchWeather]);
+  useEffect(() => {
+    if (!lat || !lon) {
+      queueMicrotask(() => { setError("Missing lat/lon"); setLoading(false); });
+      return;
+    }
+    queueMicrotask(() => { fetchWeather(); });
+  }, [fetchWeather, lat, lon]);
 
   const selectedPeriod = useMemo(() => {
     if (!weather) return null;

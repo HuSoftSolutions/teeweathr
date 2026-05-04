@@ -449,11 +449,11 @@ export default function DashboardLanding() {
 
   // ─── Search ───────────────────────────────────────────────────
 
+  const searchTooShort = searchQuery.trim().length < 2;
+  const visibleSearchResults = searchTooShort ? [] : searchResults;
+
   useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
+    if (searchTooShort) return;
 
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -471,7 +471,7 @@ export default function DashboardLanding() {
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, userLocation]);
+  }, [searchQuery, userLocation, searchTooShort]);
 
   // ─── Select a search result ───────────────────────────────────
 
@@ -594,11 +594,11 @@ export default function DashboardLanding() {
                     <Loader2 className="h-3 w-3 animate-spin" />Searching...
                   </div>
                 )}
-                {!searching && searchResults.length === 0 && (
+                {!searching && visibleSearchResults.length === 0 && (
                   <p className="p-3 text-xs text-slate-600">No courses found</p>
                 )}
                 {!searching &&
-                  searchResults.map((c) => (
+                  visibleSearchResults.map((c) => (
                     <button
                       key={c.id}
                       onClick={() => handleSearchSelect(c)}

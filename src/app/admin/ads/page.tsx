@@ -26,7 +26,15 @@ export default function AdsPage() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchAds(); }, []);
+  useEffect(() => {
+    fetch("/api/ads")
+      .then((r) => r.json())
+      .then((json) => {
+        setAds(json.ads ?? []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
   const handleCreate = async () => {
     await fetch("/api/ads", {

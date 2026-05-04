@@ -310,8 +310,11 @@ function SearchModal({
     if (isOpen && inputRef.current) setTimeout(() => inputRef.current?.focus(), 50);
   }, [isOpen]);
 
+  const tooShort = query.trim().length < 2;
+  const visibleResults = tooShort ? [] : results;
+
   useEffect(() => {
-    if (query.trim().length < 2) { setResults([]); return; }
+    if (tooShort) return;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setSearching(true);
@@ -327,7 +330,7 @@ function SearchModal({
         .finally(() => setSearching(false));
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [query, userLocation]);
+  }, [query, userLocation, tooShort]);
 
   if (!isOpen) return null;
 
@@ -363,11 +366,11 @@ function SearchModal({
           {!searching && query.length < 2 && (
             <p className="py-10 text-center text-sm text-white/30">Type a course name, city, or state</p>
           )}
-          {!searching && query.length >= 2 && results.length === 0 && (
+          {!searching && query.length >= 2 && visibleResults.length === 0 && (
             <p className="py-10 text-center text-sm text-white/30">No courses found</p>
           )}
           {!searching &&
-            results.map((c) => (
+            visibleResults.map((c) => (
               <button
                 key={c.id}
                 onClick={() => { onSelect(c); onClose(); setQuery(""); }}

@@ -64,7 +64,7 @@ export default function BusinessDetailPage({ params }: { params: Promise<{ id: s
   }
 
   useEffect(() => {
-    setLoading(true);
+    queueMicrotask(() => setLoading(true));
     fetch(`/api/admin/businesses/${id}`)
       .then((r) => r.json())
       .then((data) => { setBiz(data.business); setCourses(data.courses || []); })
@@ -203,8 +203,11 @@ function AssignCourseModal({ businessId, onClose, onAssigned }: { businessId: st
   const [searching, setSearching] = useState(false);
   const [assigning, setAssigning] = useState(false);
 
+  const tooShort = query.trim().length < 2;
+  const visibleResults = tooShort ? [] : results;
+
   useEffect(() => {
-    if (query.trim().length < 2) { setResults([]); return; }
+    if (tooShort) return;
     const t = setTimeout(() => {
       setSearching(true);
       fetch(`/api/admin/courses`).then((r) => r.json())
@@ -217,7 +220,7 @@ function AssignCourseModal({ businessId, onClose, onAssigned }: { businessId: st
         .finally(() => setSearching(false));
     }, 300);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, tooShort]);
 
   async function assign(course: Course) {
     setAssigning(true);
@@ -249,8 +252,8 @@ function AssignCourseModal({ businessId, onClose, onAssigned }: { businessId: st
         <div className="max-h-[40vh] overflow-y-auto p-3">
           {searching && <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-zinc-500" /></div>}
           {!searching && query.length < 2 && <p className="text-center text-sm text-zinc-600 py-6">Search for a course to assign</p>}
-          {!searching && query.length >= 2 && results.length === 0 && <p className="text-center text-sm text-zinc-600 py-6">No courses found. Add courses first.</p>}
-          {!searching && results.map((c) => (
+          {!searching && query.length >= 2 && visibleResults.length === 0 && <p className="text-center text-sm text-zinc-600 py-6">No courses found. Add courses first.</p>}
+          {!searching && visibleResults.map((c) => (
             <button key={c.id} onClick={() => assign(c)} disabled={assigning}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-zinc-800 disabled:opacity-50">
               <Flag className="h-3.5 w-3.5 text-zinc-500 shrink-0" />

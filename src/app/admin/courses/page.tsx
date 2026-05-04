@@ -235,7 +235,7 @@ export default function AdminCoursesPage() {
   function reload() { setRefreshKey((k) => k + 1); }
 
   useEffect(() => {
-    setLoadingFs(true);
+    queueMicrotask(() => setLoadingFs(true));
     fetch("/api/admin/courses")
       .then((r) => r.json())
       .then((data) => setFirestoreCourses(data.all || []))
@@ -243,8 +243,11 @@ export default function AdminCoursesPage() {
       .finally(() => setLoadingFs(false));
   }, [refreshKey]);
 
+  const tooShort = query.trim().length < 2;
+  const visibleSearchResults = tooShort ? [] : searchResults;
+
   useEffect(() => {
-    if (query.trim().length < 2) { setSearchResults([]); return; }
+    if (tooShort) return;
     const t = setTimeout(() => {
       setSearching(true);
       fetch(`/api/courses?q=${encodeURIComponent(query.trim())}`)
@@ -252,7 +255,7 @@ export default function AdminCoursesPage() {
         .catch(() => setSearchResults([])).finally(() => setSearching(false));
     }, 300);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, tooShort]);
 
   const featured = firestoreCourses.filter((c) => c.featured);
   const managed = firestoreCourses.filter((c) => !c.featured);
@@ -285,11 +288,11 @@ export default function AdminCoursesPage() {
       {query.length >= 2 && (
         <div className="mb-8">
           <h2 className="flex items-center gap-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            <Search className="h-3.5 w-3.5" />Search Results <span className="text-zinc-600">({searchResults.length})</span>
+            <Search className="h-3.5 w-3.5" />Search Results <span className="text-zinc-600">({visibleSearchResults.length})</span>
           </h2>
           {searching ? <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-zinc-500" /></div>
-            : searchResults.length === 0 ? <p className="text-sm text-zinc-600 py-4">No results</p>
-            : <div className="space-y-2">{searchResults.map((c) => (
+            : visibleSearchResults.length === 0 ? <p className="text-sm text-zinc-600 py-4">No results</p>
+            : <div className="space-y-2">{visibleSearchResults.map((c) => (
               <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-zinc-100 truncate">{c.name}</p>

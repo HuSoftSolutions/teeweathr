@@ -71,15 +71,11 @@ export default function DashboardSubscription() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (searchParams.get("success") === "true") {
-      setToast("Subscription activated successfully!");
-    } else if (searchParams.get("canceled") === "true") {
-      setToast("Checkout was canceled.");
-    }
-  }, [searchParams]);
+  const [toast, setToast] = useState<string | null>(() => {
+    if (searchParams.get("success") === "true") return "Subscription activated successfully!";
+    if (searchParams.get("canceled") === "true") return "Checkout was canceled.";
+    return null;
+  });
 
   useEffect(() => {
     if (toast) {

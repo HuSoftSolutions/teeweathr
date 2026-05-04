@@ -165,7 +165,7 @@ export default function BusinessesPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    setLoading(true);
+    queueMicrotask(() => setLoading(true));
     fetch("/api/businesses")
       .then((r) => r.json())
       .then((data) => setBusinesses(data.businesses || []))

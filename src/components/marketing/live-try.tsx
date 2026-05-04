@@ -28,8 +28,11 @@ export function LiveTry() {
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const tooShort = query.trim().length < 2;
+  const visibleMatches = tooShort ? [] : matches;
+
   useEffect(() => {
-    if (query.trim().length < 2) { setMatches([]); return; }
+    if (tooShort) return;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setSearching(true);
@@ -40,7 +43,7 @@ export function LiveTry() {
         .finally(() => setSearching(false));
     }, 250);
     return () => clearTimeout(debounceRef.current);
-  }, [query]);
+  }, [query, tooShort]);
 
   async function loadCourse(course: GolfCourse) {
     setQuery(course.name);
@@ -80,9 +83,9 @@ export function LiveTry() {
           {searching && <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />}
         </div>
 
-        {matches.length > 0 && (
+        {visibleMatches.length > 0 && (
           <div className="absolute top-full left-0 right-0 mt-1.5 rounded-xl border border-zinc-200 bg-white shadow-xl z-20 overflow-hidden">
-            {matches.map((c) => (
+            {visibleMatches.map((c) => (
               <button
                 key={c.id}
                 onClick={() => loadCourse(c)}

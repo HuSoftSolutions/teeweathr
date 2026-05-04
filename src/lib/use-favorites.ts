@@ -7,13 +7,15 @@ export function useFavorites() {
   const [favorites, setFavorites] = useState<GolfCourse[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // Load from localStorage on mount
+  // Load from localStorage on mount (deferred to avoid sync setState in effect)
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setFavorites(JSON.parse(raw));
-    } catch { /* ignore corrupt data */ }
-    setLoaded(true);
+    queueMicrotask(() => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) setFavorites(JSON.parse(raw));
+      } catch { /* ignore corrupt data */ }
+      setLoaded(true);
+    });
   }, []);
 
   // Persist whenever favorites change (skip initial load)

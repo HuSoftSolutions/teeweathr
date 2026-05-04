@@ -218,8 +218,11 @@ function SearchModal({ isOpen, onClose, onSelect, userLocation, isFavorite, onTo
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const tooShort = query.trim().length < 2;
+  const visibleResults = tooShort ? [] : results;
+
   useEffect(() => {
-    if (query.trim().length < 2) { setResults([]); return; }
+    if (tooShort) return;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setSearching(true);
@@ -228,7 +231,7 @@ function SearchModal({ isOpen, onClose, onSelect, userLocation, isFavorite, onTo
       fetch(`/api/courses?${params}`).then((r) => r.json()).then((d) => setResults(d.courses || [])).catch(() => setResults([])).finally(() => setSearching(false));
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [query, userLocation]);
+  }, [query, userLocation, tooShort]);
 
   useEffect(() => { if (isOpen) setTimeout(() => inputRef.current?.focus(), 50); }, [isOpen]);
 
@@ -264,11 +267,11 @@ function SearchModal({ isOpen, onClose, onSelect, userLocation, isFavorite, onTo
             <p className="py-8 text-center text-sm text-zinc-600">Search for a course by name, city, or state</p>
           )}
 
-          {!searching && query.length >= 2 && results.length === 0 && (
+          {!searching && query.length >= 2 && visibleResults.length === 0 && (
             <p className="py-8 text-center text-sm text-zinc-500">No courses found</p>
           )}
 
-          {!searching && results.map((c) => (
+          {!searching && visibleResults.map((c) => (
             <CourseRow key={c.id} course={c} onSelect={() => { onSelect(c); onClose(); setQuery(""); }}
               isFav={isFavorite(c.id)} onToggleFav={() => onToggleFavorite(c)} />
           ))}
@@ -362,15 +365,15 @@ export default function Home() {
   useEffect(() => {
     if (!selected || initialDaySet) return;
     const hour = new Date().getHours();
+    let nextIdx = 0;
     if (hour >= 18) {
-      // Find the index of the next daytime period (tomorrow)
-      const tomorrowIdx = selected.weather.periods.findIndex((p, i) => {
-        if (i === 0) return false; // skip today
-        return p.isDaytime;
-      });
-      if (tomorrowIdx > 0) setSelectedDayIndex(tomorrowIdx);
+      const tomorrowIdx = selected.weather.periods.findIndex((p, i) => i > 0 && p.isDaytime);
+      if (tomorrowIdx > 0) nextIdx = tomorrowIdx;
     }
-    setInitialDaySet(true);
+    queueMicrotask(() => {
+      if (nextIdx) setSelectedDayIndex(nextIdx);
+      setInitialDaySet(true);
+    });
   }, [selected, initialDaySet]);
 
   const handleSearchSelect = useCallback(async (course: GolfCourse) => {
