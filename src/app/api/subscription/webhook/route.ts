@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { stripe, PLANS } from "@/lib/stripe";
 import { db } from "@/lib/firebase/admin";
+import { EMBED_CONFIG_TAG } from "@/app/api/embed/[apiKey]/route";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
             "subscription.stripeSubscriptionId": session.subscription as string,
             "subscription.status": "active",
           });
+          revalidateTag(EMBED_CONFIG_TAG, "max");
         }
         break;
       }
@@ -105,6 +108,7 @@ export async function POST(request: NextRequest) {
             "subscription.tier": tier,
             "subscription.status": status,
           });
+          revalidateTag(EMBED_CONFIG_TAG, "max");
         }
         break;
       }
@@ -118,6 +122,7 @@ export async function POST(request: NextRequest) {
             "subscription.status": "canceled",
             "subscription.stripeSubscriptionId": null,
           });
+          revalidateTag(EMBED_CONFIG_TAG, "max");
         }
         break;
       }

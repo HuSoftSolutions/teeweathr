@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { EMBED_CONFIG_TAG } from "@/app/api/embed/[apiKey]/route";
 
 // Assign a course to a business
 export async function POST(
@@ -31,6 +33,7 @@ export async function POST(
     });
 
     await batch.commit();
+    revalidateTag(EMBED_CONFIG_TAG, "max");
     return Response.json({ ok: true });
   } catch (error) {
     console.error("Course assignment error:", error);
@@ -65,6 +68,7 @@ export async function DELETE(
     });
 
     await batch.commit();
+    revalidateTag(EMBED_CONFIG_TAG, "max");
     return Response.json({ ok: true });
   } catch (error) {
     console.error("Course unassignment error:", error);

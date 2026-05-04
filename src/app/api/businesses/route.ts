@@ -1,9 +1,32 @@
 import { NextRequest } from "next/server";
+import { cookies } from "next/headers";
 import { adminAuth, db } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { verifySession } from "@/lib/firebase/session";
 
-// Admin-only: create a business + its Firebase Auth user
+// Comment block guards both methods: this file is the admin-side business
+// management surface. Self-serve signup lives in /api/auth/signup and
+// creates the business doc itself with role-appropriate scope. The admin
+// methods here can do things signup can't (skip email verification, set
+// arbitrary contact details, look up by email, list all businesses) so
+// they need to be gated behind the admin role.
+async function requireAdmin(): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const cookieStore = await cookies();
+  const session = cookieStore.get("__session")?.value;
+  if (!session) return { ok: false, status: 401, error: "Not authenticated" };
+  const user = await verifySession(session);
+  if (!user || user.role !== "admin") {
+    return { ok: false, status: 403, error: "Forbidden" };
+  }
+  return { ok: true };
+}
+
+// Admin-only: create a business + its Firebase Auth user.
+// (Self-serve signup goes through /api/auth/signup instead.)
 export async function POST(request: NextRequest) {
+  const auth = await requireAdmin();
+  if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status });
+
   try {
     const { name, contactName, contactEmail, phone, website, password } =
       await request.json();
@@ -72,7 +95,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Admin-only: list every business. Leaks contact info + API keys, so the
+// role check here is load-bearing.
 export async function GET() {
+  const auth = await requireAdmin();
+  if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status });
+
   try {
     const snapshot = await db.collection("businesses").get();
     const businesses = snapshot.docs.map((doc) => {

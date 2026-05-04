@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Copy, Check, Code, Monitor, Smartphone, MessageSquare, BellRing, PanelBottomClose } from "lucide-react";
+import { Copy, Check, Code, Monitor, Smartphone, MessageSquare, BellRing, PanelBottomClose, Save } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -175,6 +175,8 @@ export function EmbedConfigurator({ course, baseUrl, tier, apiKey }: { course: E
   });
   const [copied, setCopied] = useState(false);
   const [previewTab, setPreviewTab] = useState<"preview" | "code">("preview");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   const resolvedBaseUrl = baseUrl || (typeof window !== "undefined" ? window.location.origin : "");
   // Preview uses raw params so it renders inline; production code uses API key
@@ -191,6 +193,33 @@ export function EmbedConfigurator({ course, baseUrl, tier, apiKey }: { course: E
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function saveDefaults() {
+    setSaveState("saving");
+    setSaveMsg(null);
+    try {
+      const res = await fetch("/api/dashboard/embed-config", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId: course.id,
+          theme: config.theme,
+          accent: config.accent,
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setSaveState("error");
+        setSaveMsg(err.error || "Save failed");
+        return;
+      }
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 2500);
+    } catch {
+      setSaveState("error");
+      setSaveMsg("Network error");
+    }
   }
 
   return (
@@ -249,6 +278,24 @@ export function EmbedConfigurator({ course, baseUrl, tier, apiKey }: { course: E
           </div>
         </div>
       </div>
+
+      {/* Save defaults — persists theme + accent for keyed embed loads. */}
+      {apiKey && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={saveDefaults}
+            disabled={saveState === "saving"}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+          >
+            {saveState === "saved" ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
+            {saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : "Save as default for this course"}
+          </button>
+          {saveState === "error" && saveMsg && (
+            <span className="text-xs text-red-400">{saveMsg}</span>
+          )}
+          <span className="text-[11px] text-zinc-600">Applies to your `?key=` iframe URL.</span>
+        </div>
+      )}
 
       {/* Size controls (for card/corner formats) */}
       {(config.format === "card" || config.format === "corner") && (

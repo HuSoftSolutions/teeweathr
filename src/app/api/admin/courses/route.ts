@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { EMBED_CONFIG_TAG } from "@/app/api/embed/[apiKey]/route";
 
 export async function GET() {
   try {
@@ -73,6 +75,7 @@ export async function PUT(request: NextRequest) {
       ...updates,
       updatedAt: FieldValue.serverTimestamp(),
     });
+    revalidateTag(EMBED_CONFIG_TAG, "max");
 
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -88,6 +91,7 @@ export async function DELETE(request: NextRequest) {
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
     await db.collection("courses").doc(id).delete();
+    revalidateTag(EMBED_CONFIG_TAG, "max");
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Failed to delete course:", error);

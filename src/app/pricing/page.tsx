@@ -4,16 +4,26 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "TeeWeathr — Pricing",
-  description: "Golf weather embeds for your course website. Free, Pro, and Enterprise plans.",
+  description: "Golf weather embeds for your course website. Free, Pro, and Multi-course plans.",
 };
 
-const TIERS = [
+type TierCTA = { label: string; href: string };
+
+const TIERS: Array<{
+  name: string;
+  price: string;
+  period: string;
+  description: string;
+  cta: TierCTA;
+  highlight: boolean;
+  features: { label: string; included: boolean }[];
+}> = [
   {
     name: "Free",
     price: "$0",
     period: "forever",
-    description: "Get started with weather on your site",
-    cta: "Contact us",
+    description: "Test it on your course. Ad-supported.",
+    cta: { label: "Start free", href: "/signup" },
     highlight: false,
     features: [
       { label: "Embeddable weather widget", included: true },
@@ -21,49 +31,50 @@ const TIERS = [
       { label: "Dark & light themes", included: true },
       { label: "1 course", included: true },
       { label: "\"Powered by TeeWeathr\" branding", included: true },
-      { label: "Sponsor ad slot in widget", included: true },
-      { label: "Custom accent colors", included: false },
-      { label: "Logo upload", included: false },
-      { label: "Analytics dashboard", included: false },
-      { label: "Remove branding", included: false },
+      { label: "Sponsor ad in widget", included: true },
+      { label: "Basic analytics", included: true },
+      { label: "Custom accent color", included: false },
+      { label: "Ad-free widget", included: false },
+      { label: "Multiple courses", included: false },
     ],
   },
   {
     name: "Pro",
-    price: "$29",
+    price: "$19.99",
     period: "/month",
-    description: "For courses that want a polished presence",
-    cta: "Get started",
+    description: "For the course ready to make it part of the brand.",
+    cta: { label: "Start Pro", href: "/signup?plan=pro" },
     highlight: true,
     features: [
       { label: "Everything in Free", included: true },
       { label: "Ad-free widget", included: true },
-      { label: "Custom accent colors", included: true },
-      { label: "Logo upload", included: true },
-      { label: "Up to 3 courses", included: true },
-      { label: "Daily analytics (90-day history)", included: true },
+      { label: "Custom accent color (6 options)", included: true },
+      { label: "Light & dark theme control", included: true },
+      { label: "1 course", included: true },
+      { label: "90-day analytics history", included: true },
       { label: "Subtle \"Powered by\" branding", included: true },
       { label: "Priority support", included: true },
-      { label: "Remove branding", included: false },
-      { label: "API access", included: false },
+      { label: "Multiple courses", included: false },
+      { label: "Remove branding entirely", included: false },
     ],
   },
   {
-    name: "Enterprise",
-    price: "$99",
-    period: "/month",
-    description: "For resort groups and multi-course operations",
-    cta: "Contact us",
+    name: "Multi-course",
+    price: "Custom",
+    period: "contact us",
+    description: "Resorts, management groups, and multi-property operators.",
+    cta: { label: "Contact us", href: "mailto:hello@teeweathr.com?subject=Multi-course inquiry" },
     highlight: false,
     features: [
       { label: "Everything in Pro", included: true },
+      { label: "Multiple courses", included: true },
       { label: "White-label (remove all branding)", included: true },
-      { label: "Unlimited courses", included: true },
+      { label: "Logo upload", included: true },
       { label: "API access (JSON endpoint)", included: true },
-      { label: "Custom domain for embeds", included: true },
       { label: "Full analytics + export", included: true },
       { label: "Multi-user dashboard access", included: true },
       { label: "Dedicated onboarding", included: true },
+      { label: "Custom contract & invoicing", included: true },
     ],
   },
 ];
@@ -119,14 +130,14 @@ export default function PricingPage() {
               </div>
               <p className="text-sm text-zinc-400 mt-2 mb-6">{tier.description}</p>
 
-              <a href="mailto:hello@teeweathr.com"
+              <Link href={tier.cta.href}
                 className={`block text-center rounded-lg px-4 py-2.5 text-sm font-medium transition-colors mb-6 ${
                   tier.highlight
                     ? "bg-emerald-500 text-white hover:bg-emerald-400"
                     : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
                 }`}>
-                {tier.cta}
-              </a>
+                {tier.cta.label}
+              </Link>
 
               <div className="space-y-3 flex-1">
                 {tier.features.map((feat) => (

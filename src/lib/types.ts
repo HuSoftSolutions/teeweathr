@@ -24,6 +24,22 @@ export interface WeatherData {
   generatedAt: string;
 }
 
+export type AlertSeverity = "Extreme" | "Severe" | "Moderate" | "Minor" | "Unknown";
+export type AlertUrgency = "Immediate" | "Expected" | "Future" | "Past" | "Unknown";
+
+export interface WeatherAlert {
+  id: string;
+  event: string;          // "Tornado Warning", "Severe Thunderstorm Warning", ...
+  headline: string;
+  severity: AlertSeverity;
+  urgency: AlertUrgency;
+  effective: string;      // ISO
+  expires: string;        // ISO
+  description: string;
+  // Set by our classifier — UI uses this, not raw event/severity strings
+  level: "blocking" | "warning" | "info";
+}
+
 export interface GolfConditions {
   score: number;
   label: string;

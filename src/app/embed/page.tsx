@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef, use } from "react";
-import type { WeatherData, WeatherPeriod } from "@/lib/types";
+import type { WeatherData, WeatherPeriod, WeatherAlert } from "@/lib/types";
+import { trackEmbedEvent } from "@/lib/embed-analytics";
 import {
   calculateGolfConditions, analyzeDayVerdict, getHourlyForDay, getGrade,
   analyzeTimeBlocks, type TimeBlock,
@@ -134,6 +135,50 @@ const ACCENT_COLORS: Record<string, string> = {
   red: "#ef4444", orange: "#f97316", zinc: "#71717a",
 };
 
+// Banner shown above the verdict when NWS has an active alert for this point.
+// Blocking-level alerts (tornado, severe thunderstorm, etc.) get red treatment;
+// warning-level get amber. info-level alerts are filtered out before reaching here.
+function AlertBanner({ alert, isDark, size }: {
+  alert: WeatherAlert;
+  isDark: boolean;
+  size: "compact" | "medium" | "full";
+}) {
+  const blocking = alert.level === "blocking";
+  const bgClass = blocking
+    ? (isDark ? "bg-red-950/60 border-red-900" : "bg-red-50 border-red-200")
+    : (isDark ? "bg-amber-950/40 border-amber-900" : "bg-amber-50 border-amber-200");
+  const textClass = blocking
+    ? (isDark ? "text-red-200" : "text-red-800")
+    : (isDark ? "text-amber-200" : "text-amber-800");
+  const subTextClass = blocking
+    ? (isDark ? "text-red-300/70" : "text-red-700/80")
+    : (isDark ? "text-amber-300/70" : "text-amber-700/80");
+
+  // Compact uses a single-line treatment to save vertical space.
+  if (size === "compact") {
+    return (
+      <div className={`rounded-md border ${bgClass} px-2 py-1.5 flex items-center gap-1.5`}>
+        <ShieldX className={`h-3 w-3 shrink-0 ${textClass}`} />
+        <p className={`text-[10px] font-semibold truncate ${textClass}`}>{alert.event}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`rounded-lg border ${bgClass} px-3 py-2 flex items-start gap-2`}>
+      <ShieldX className={`${size === "full" ? "h-4 w-4 mt-0.5" : "h-3.5 w-3.5 mt-0.5"} shrink-0 ${textClass}`} />
+      <div className="flex-1 min-w-0">
+        <p className={`${size === "full" ? "text-sm" : "text-xs"} font-semibold ${textClass}`}>
+          {alert.event}
+        </p>
+        <p className={`${size === "full" ? "text-[11px]" : "text-[10px]"} ${subTextClass} line-clamp-2`}>
+          {alert.headline}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // Embed-specific: use accent color for good scores, amber/red for bad
 function gradeStyle(score: number): React.CSSProperties {
   if (score >= 60) return { color: "var(--accent)" };
@@ -214,11 +259,12 @@ function BlockRow({ block, isDark, compact }: { block: TimeBlock; isDark: boolea
 
 // ─── Micro View (banner + inline badge) ─────────────────────────
 
-function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds, todayStr, tmrwStr }: {
+function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds, todayStr, tmrwStr, alert }: {
   score: number; name: string; isDark: boolean;
   selectedPeriod: WeatherPeriod; onPrev: () => void; onNext: () => void;
   hasPrev: boolean; hasNext: boolean; showAds: boolean;
   todayStr: string; tmrwStr: string;
+  alert?: WeatherAlert | null;
 }) {
   const grade = getGrade(score);
   const m = isDark ? "text-zinc-500" : "text-zinc-400";
@@ -227,18 +273,37 @@ function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPre
     : date.toDateString() === tmrwStr ? "Tomorrow"
     : date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 
+  const blocking = alert?.level === "blocking";
+  const warning = alert?.level === "warning";
+  // Blocking alerts (lightning, tornado) override the normal grade color —
+  // a green "A" with a tornado warning would be misleading.
+  const gradeOverride: React.CSSProperties | undefined = blocking ? { color: "#f87171" } : undefined;
+
   return (
     <div className="flex flex-col h-full w-full">
       <div className="flex items-center flex-1 min-h-0 px-3 gap-2">
-        {/* Grade */}
-        <span className="text-2xl font-bold shrink-0" style={gradeStyle(score)}>{grade.letter}</span>
+        {/* Grade — colored red when an alert blocks play. */}
+        <span className="text-2xl font-bold shrink-0" style={gradeOverride ?? gradeStyle(score)}>{grade.letter}</span>
 
-        {/* Course + date */}
+        {/* Course + status */}
         <div className="flex-1 min-w-0">
-          <p className={`text-[11px] font-medium truncate ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>{name}</p>
-          <p className={`text-[9px] ${m} truncate`}>
-            {grade.label} · {selectedPeriod.temperature}° · {selectedPeriod.shortForecast}
+          <p className={`text-[11px] font-medium truncate flex items-center gap-1 ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
+            {blocking && <ShieldX className="h-2.5 w-2.5 text-red-400 shrink-0" />}
+            <span className="truncate">{name}</span>
           </p>
+          {blocking ? (
+            <p className="text-[9px] text-red-400 font-medium truncate">
+              {alert!.event} · {selectedPeriod.temperature}°
+            </p>
+          ) : warning ? (
+            <p className="text-[9px] text-amber-400 truncate">
+              {alert!.event} · {selectedPeriod.temperature}°
+            </p>
+          ) : (
+            <p className={`text-[9px] ${m} truncate`}>
+              {grade.label} · {selectedPeriod.temperature}° · {selectedPeriod.shortForecast}
+            </p>
+          )}
         </div>
 
         {/* Date + nav arrows */}
@@ -316,31 +381,30 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   const showAds = apiKey ? (serverConfig?.showAds ?? false) : params.ads === "true";
   const resolvedCourseId = serverConfig?.courseId || courseParam || "unknown";
 
-  // Analytics beacon
+  // Analytics — events queue in memory and flush as a batch (debounced or
+  // on pagehide), so 1M views ≠ 1M Firestore writes. See @/lib/embed-analytics.
   const viewTracked = useRef(false);
   useEffect(() => {
     if (!apiKey || viewTracked.current || configLoading) return;
     viewTracked.current = true;
-    fetch("/api/embed/analytics", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey, courseId: resolvedCourseId, event: "view" }),
-    }).catch(() => {});
+    trackEmbedEvent(apiKey, resolvedCourseId, "view");
   }, [apiKey, resolvedCourseId, configLoading]);
 
   const trackInteraction = useCallback(() => {
     if (!apiKey) return;
-    fetch("/api/embed/analytics", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey, courseId: resolvedCourseId, event: "interaction" }),
-    }).catch(() => {});
+    trackEmbedEvent(apiKey, resolvedCourseId, "interaction");
+  }, [apiKey, resolvedCourseId]);
+
+  const trackReferral = useCallback(() => {
+    if (!apiKey) return;
+    trackEmbedEvent(apiKey, resolvedCourseId, "referral");
   }, [apiKey, resolvedCourseId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetSize = useWidgetSize(containerRef);
 
   const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
@@ -355,13 +419,21 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
 
   const fetchWeather = useCallback(async () => {
     try {
-      const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
-      if (!res.ok) throw new Error();
-      const data: WeatherData = await res.json();
+      const [wRes, aRes] = await Promise.all([
+        fetch(`/api/weather?lat=${lat}&lon=${lon}`),
+        fetch(`/api/alerts?lat=${lat}&lon=${lon}`),
+      ]);
+      if (!wRes.ok) throw new Error();
+      const data: WeatherData = await wRes.json();
       setWeather(data);
       if (new Date().getHours() >= 18) {
         const tmrwIdx = data.periods.findIndex((p, i) => i > 0 && p.isDaytime);
         if (tmrwIdx > 0) setSelectedDayIndex(tmrwIdx);
+      }
+      // Alerts are best-effort — silently fall back to no banner on failure.
+      if (aRes.ok) {
+        const alertData: { alerts?: WeatherAlert[] } = await aRes.json();
+        setAlerts(alertData.alerts ?? []);
       }
     } catch { setError("Weather unavailable"); }
     finally { setLoading(false); }
@@ -374,6 +446,9 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
     }
     queueMicrotask(() => { fetchWeather(); });
   }, [fetchWeather, lat, lon]);
+
+  const topAlert = alerts[0] ?? null;
+  const hasBlockingAlert = topAlert?.level === "blocking";
 
   const selectedPeriod = useMemo(() => {
     if (!weather) return null;
@@ -441,6 +516,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               showAds={showAds}
               todayStr={todayStr}
               tmrwStr={tmrwStr}
+              alert={topAlert}
               selectedPeriod={selectedPeriod}
               hasPrev={dayPeriods.findIndex((p) => weather.periods.indexOf(p) === selectedDayIndex) > 0}
               hasNext={dayPeriods.findIndex((p) => weather.periods.indexOf(p) === selectedDayIndex) < dayPeriods.length - 1}
@@ -465,12 +541,16 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                   <p className={`text-[10px] ${m}`}>{verdict.headline}</p>
                 </div>
               </div>
+              {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="compact" />}
               <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
                 onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark} isCompact
                 todayStr={todayStr} tmrwStr={tmrwStr} />
               {bestBlock && (
                 <p className={`text-[10px] ${m}`}>Best: {bestBlock.name} · {bestBlock.temp.high}°</p>
               )}
+              <p className={`text-[9px] ${m}`}>
+                Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+              </p>
               {showAds && <AdSlot isDark={isDark} variant="compact" />}
               {showBranding && (
                 <p className={`text-[8px] mt-auto ${isDark ? "text-zinc-700" : "text-zinc-300"}`}>
@@ -493,8 +573,10 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
                 onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
                 todayStr={todayStr} tmrwStr={tmrwStr} />
+              {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="medium" />}
               <div className="flex items-center gap-2">
-                {verdict.status === "go" ? <CheckCircle2 className="h-4 w-4 shrink-0" style={statusStyle("go")} /> :
+                {hasBlockingAlert ? <ShieldX className="h-4 w-4 text-red-400 shrink-0" /> :
+                 verdict.status === "go" ? <CheckCircle2 className="h-4 w-4 shrink-0" style={statusStyle("go")} /> :
                  verdict.status === "mixed" ? <AlertTriangle className="h-4 w-4 shrink-0" style={statusStyle("mixed")} /> :
                  <ShieldX className="h-4 w-4 text-red-400 shrink-0" />}
                 <p className="text-xs font-medium flex-1">{verdict.headline}</p>
@@ -503,11 +585,14 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               <div className={`rounded-xl border ${brd} ${cardBg} divide-y ${divider}`}>
                 {blocks.map((block) => <BlockRow key={block.name} block={block} isDark={isDark} compact />)}
               </div>
+              <p className={`text-center text-[10px] ${m}`}>
+                Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+              </p>
               {showAds && <AdSlot isDark={isDark} />}
               {showBranding && (
                 <p className={`text-center text-[9px] mt-1 ${isDark ? "text-zinc-700" : "text-zinc-300"}`}>
                   <a href="/" target="_blank" rel="noopener" className="hover:underline" style={{ color: "var(--accent)" }}
-                    onClick={() => { if (apiKey) fetch("/api/embed/analytics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey, courseId: resolvedCourseId, event: "referral" }) }).catch(() => {}); }}>Powered by TeeWeathr</a>
+                    onClick={trackReferral}>Powered by TeeWeathr</a>
                 </p>
               )}
             </div>
@@ -530,9 +615,11 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               <p className={`text-xs ${m} -mt-2`}>
                 {new Date(selectedPeriod.startTime).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
               </p>
+              {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="full" />}
               {/* Verdict */}
               <div className="flex items-center gap-3">
-                {verdict.status === "go" ? <CheckCircle2 className="h-5 w-5 shrink-0" style={statusStyle("go")} /> :
+                {hasBlockingAlert ? <ShieldX className="h-5 w-5 text-red-400 shrink-0" /> :
+                 verdict.status === "go" ? <CheckCircle2 className="h-5 w-5 shrink-0" style={statusStyle("go")} /> :
                  verdict.status === "mixed" ? <AlertTriangle className="h-5 w-5 shrink-0" style={statusStyle("mixed")} /> :
                  <ShieldX className="h-5 w-5 text-red-400 shrink-0" />}
                 <div className="flex-1">
@@ -559,11 +646,14 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                   Best: <span className={isDark ? "text-zinc-300" : "text-zinc-700"}>{bestBlock.name}</span> ({bestBlock.label})
                 </p>
               )}
+              <p className={`text-center text-[11px] ${m}`}>
+                Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+              </p>
               {showAds && <AdSlot isDark={isDark} />}
               {showBranding && (
                 <p className={`text-center text-[10px] mt-1 ${isDark ? "text-zinc-700" : "text-zinc-300"}`}>
                   <a href="/" target="_blank" rel="noopener" className="hover:underline" style={{ color: "var(--accent)" }}
-                      onClick={() => { if (apiKey) fetch("/api/embed/analytics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey, courseId: resolvedCourseId, event: "referral" }) }).catch(() => {}); }}>Powered by TeeWeathr</a>
+                      onClick={trackReferral}>Powered by TeeWeathr</a>
                 </p>
               )}
             </div>

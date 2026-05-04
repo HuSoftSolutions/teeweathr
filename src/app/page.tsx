@@ -5,6 +5,7 @@ import {
   Palette, Zap, Smartphone, ShieldCheck,
 } from "lucide-react";
 import { LiveTry } from "@/components/marketing/live-try";
+import { DEMO_API_KEY } from "@/lib/demo";
 
 // ─── Nav ─────────────────────────────────────────────────────────
 
@@ -512,12 +513,15 @@ function HowItWorks() {
           </div>
           <pre className="px-5 py-4 text-[12px] text-zinc-200 font-mono leading-relaxed overflow-x-auto">
 {`<iframe
-  src="https://teeweathr.com/embed?key=tw_live_xxxx"
+  src="https://teeweathr.com/embed?key=${DEMO_API_KEY}"
   width="100%" height="320"
   style="border:0; border-radius:12px"
   loading="lazy"
 ></iframe>`}
           </pre>
+          <p className="px-5 py-3 text-[11px] text-zinc-500 border-t border-zinc-800 bg-zinc-950/60">
+            This snippet is live — paste it on any page and you&rsquo;ll see Pebble Beach&rsquo;s weather render. After signup you&rsquo;ll get your own key for your course.
+          </p>
         </div>
       </div>
     </section>
@@ -570,28 +574,31 @@ function PricingTeaser() {
     {
       name: "Free",
       price: "$0",
-      pitch: "1 course, ad-supported. Perfect for trying it out.",
-      bullets: ["1 course", "Ad-supported", "TeeWeathr branding"],
+      period: "forever",
+      pitch: "Test it on your course. Ad-supported.",
+      bullets: ["1 course", "Ad-supported", "TeeWeathr branding", "Basic analytics"],
       cta: "Start free",
       href: "/signup",
       featured: false,
     },
     {
       name: "Pro",
-      price: "$29",
-      pitch: "For courses ready to make it part of the brand.",
-      bullets: ["Up to 3 courses", "No ads", "Custom colors + logo", "90-day analytics"],
-      cta: "Go Pro",
+      price: "$19.99",
+      period: "/mo",
+      pitch: "For the course ready to make it part of the brand.",
+      bullets: ["1 course", "No ads", "Custom theme + accent", "90-day analytics", "Priority support"],
+      cta: "Start Pro",
       href: "/signup?plan=pro",
       featured: true,
     },
     {
-      name: "Enterprise",
-      price: "$99",
-      pitch: "Multi-course operators and management groups.",
-      bullets: ["Unlimited courses", "White-label", "API access", "Priority support"],
-      cta: "Talk to sales",
-      href: "/pricing",
+      name: "Multi-course",
+      price: "Custom",
+      period: "contact us",
+      pitch: "Resorts, management groups, and multi-property operators.",
+      bullets: ["Multiple courses", "White-label", "API access", "Custom contract"],
+      cta: "Contact us",
+      href: "mailto:hello@teeweathr.com?subject=Multi-course inquiry",
       featured: false,
     },
   ];
@@ -620,7 +627,7 @@ function PricingTeaser() {
             <p className="text-sm font-semibold text-zinc-700">{t.name}</p>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-4xl font-bold text-zinc-900">{t.price}</span>
-              <span className="text-sm text-zinc-500">/mo</span>
+              <span className="text-sm text-zinc-500">{t.period}</span>
             </div>
             <p className="mt-3 text-sm text-zinc-600">{t.pitch}</p>
             <ul className="mt-4 space-y-2">
@@ -662,7 +669,7 @@ function FinalCTA() {
           Stop letting Weather.com decide when your tee sheet empties.
         </h2>
         <p className="mt-4 text-zinc-600 max-w-2xl mx-auto">
-          Free tier, no card required. Pro starts at $29/mo and pays for itself the first time you keep a Saturday morning that would&rsquo;ve been written off.
+          Free tier, no card required. Pro is $19.99/mo and pays for itself the first time you keep a Saturday morning that would&rsquo;ve been written off.
         </p>
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link href="/signup" className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors px-6 py-3.5 rounded-lg shadow-sm">

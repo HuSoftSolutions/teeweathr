@@ -1,12 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { isDemoApiKey } from "@/lib/demo";
+import { logger } from "@/lib/logger";
+
+const VALID_EVENTS = new Set(["view", "interaction", "referral"]);
+const MAX_BATCH = 100;
+
+type SinglePayload = { apiKey: string; courseId: string; event: string };
+type BatchPayload = { apiKey: string; courseId: string; events: string[] };
+
+function isBatch(p: SinglePayload | BatchPayload): p is BatchPayload {
+  return Array.isArray((p as BatchPayload).events);
+}
 
 export async function POST(req: NextRequest) {
-  const { apiKey, courseId, event } = await req.json();
+  let body: SinglePayload | BatchPayload;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
-  if (!apiKey || !courseId || !event) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  const { apiKey, courseId } = body;
+  if (!apiKey || !courseId) {
+    return NextResponse.json({ error: "Missing apiKey or courseId" }, { status: 400 });
+  }
+
+  // Demo key: short-circuit before any Firestore work. Landing-page traffic
+  // shouldn't pollute customer analytics or burn write quota.
+  if (isDemoApiKey(apiKey)) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // Normalize single → batch shape.
+  const rawEvents: string[] = isBatch(body) ? body.events : [body.event];
+  if (!Array.isArray(rawEvents) || rawEvents.length === 0) {
+    return NextResponse.json({ error: "No events" }, { status: 400 });
+  }
+  if (rawEvents.length > MAX_BATCH) {
+    return NextResponse.json({ error: "Batch too large" }, { status: 400 });
+  }
+
+  // Tally counts; silently drop unknown event types so a bad client can't
+  // pollute the doc with arbitrary fields.
+  const counts: Record<string, number> = {};
+  for (const e of rawEvents) {
+    if (typeof e === "string" && VALID_EVENTS.has(e)) {
+      counts[e] = (counts[e] || 0) + 1;
+    }
+  }
+  if (Object.keys(counts).length === 0) {
+    return NextResponse.json({ error: "No valid events" }, { status: 400 });
   }
 
   const now = new Date();
@@ -14,18 +59,20 @@ export async function POST(req: NextRequest) {
   const day = now.toISOString().slice(0, 10); // YYYY-MM-DD
   const docPath = `analytics/${month}_${apiKey}_${courseId}`;
 
-  const eventCapitalized = event.charAt(0).toUpperCase() + event.slice(1);
+  // Build a single merged update — one Firestore write regardless of batch
+  // size. FieldValue.increment lets multiple counters move in lockstep.
+  const updates: Record<string, FirebaseFirestore.FieldValue | string> = {
+    apiKey,
+    courseId,
+    month,
+  };
+  for (const [event, count] of Object.entries(counts)) {
+    const cap = event.charAt(0).toUpperCase() + event.slice(1);
+    updates[`total${cap}s`] = FieldValue.increment(count);
+    updates[`daily.${day}.${event}s`] = FieldValue.increment(count);
+  }
 
-  await db.doc(docPath).set(
-    {
-      apiKey,
-      courseId,
-      month,
-      [`total${eventCapitalized}s`]: FieldValue.increment(1),
-      [`daily.${day}.${event}s`]: FieldValue.increment(1),
-    },
-    { merge: true }
-  );
+  await db.doc(docPath).set(updates, { merge: true });
 
   return new NextResponse(null, { status: 204 });
 }
