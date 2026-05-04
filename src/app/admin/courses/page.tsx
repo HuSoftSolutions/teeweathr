@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import {
   Search, Star, Flag, Loader2, MapPin, Plus,
-  Pencil, Trash2, X, Check, Save,
+  Pencil, Trash2, X, Check, Save, AlertCircle,
 } from "lucide-react";
+import { PlacesAutocomplete, type SelectedPlace } from "@/components/places-autocomplete";
 
 interface Course {
   id: string;
@@ -13,35 +14,74 @@ interface Course {
   state?: string;
   lat: number;
   lon: number;
-  holes: number;
+  holes?: number;
   par?: number;
   style?: string;
   claimStatus?: string;
   featured?: boolean;
   source?: string;
+  formattedAddress?: string;
+  placeId?: string;
   distance?: number;
 }
 
 // ─── Add Course Modal ───────────────────────────────────────────
+//
+// Two paths the admin can take:
+//   1. Search Google Places (default — recommended)
+//   2. Manual lat/lon entry — fallback for courses Places can't find
 
 function AddCourseModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const [tab, setTab] = useState<"places" | "manual">("places");
+  const [selected, setSelected] = useState<SelectedPlace | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", city: "", state: "", lat: "", lon: "", holes: "18", par: "", style: "" });
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [manual, setManual] = useState({ name: "", city: "", state: "", lat: "", lon: "" });
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.name || !form.lat || !form.lon) return;
+  const handlePlaceSelect = useCallback(async (place: SelectedPlace) => {
+    setSelected(place);
+    setErrorMsg(null);
     setSaving(true);
-    await fetch("/api/admin/courses", {
+    try {
+      const res = await fetch("/api/admin/courses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ placeId: place.placeId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setErrorMsg(data.error || "Could not add course");
+        setSaving(false);
+        return;
+      }
+      onAdded();
+      onClose();
+    } catch {
+      setErrorMsg("Network error");
+      setSaving(false);
+    }
+  }, [onAdded, onClose]);
+
+  async function handleManualSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manual.name || !manual.lat || !manual.lon) return;
+    setSaving(true);
+    setErrorMsg(null);
+    const res = await fetch("/api/admin/courses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: form.name, city: form.city, state: form.state,
-        lat: parseFloat(form.lat), lon: parseFloat(form.lon),
-        holes: parseInt(form.holes) || 18, par: form.par ? parseInt(form.par) : null,
-        style: form.style || null, featured: false,
+        name: manual.name, city: manual.city, state: manual.state,
+        lat: parseFloat(manual.lat), lon: parseFloat(manual.lon),
+        featured: false,
       }),
     });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setErrorMsg(data.error || "Could not add course");
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     onAdded();
     onClose();
@@ -56,58 +96,79 @@ function AddCourseModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
           <button onClick={onClose}><X className="h-4 w-4 text-zinc-500" /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-[11px] text-zinc-500 mb-1 block">Course Name *</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
-            </div>
-            <div>
-              <label className="text-[11px] text-zinc-500 mb-1 block">City</label>
-              <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
-            </div>
-            <div>
-              <label className="text-[11px] text-zinc-500 mb-1 block">State</label>
-              <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
-            </div>
-            <div>
-              <label className="text-[11px] text-zinc-500 mb-1 block">Latitude *</label>
-              <input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} required type="number" step="any"
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
-            </div>
-            <div>
-              <label className="text-[11px] text-zinc-500 mb-1 block">Longitude *</label>
-              <input value={form.lon} onChange={(e) => setForm({ ...form, lon: e.target.value })} required type="number" step="any"
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
-            </div>
-            <div>
-              <label className="text-[11px] text-zinc-500 mb-1 block">Holes</label>
-              <input value={form.holes} onChange={(e) => setForm({ ...form, holes: e.target.value })} type="number"
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
-            </div>
-            <div>
-              <label className="text-[11px] text-zinc-500 mb-1 block">Par</label>
-              <input value={form.par} onChange={(e) => setForm({ ...form, par: e.target.value })} type="number"
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
-            </div>
-            <div className="col-span-2">
-              <label className="text-[11px] text-zinc-500 mb-1 block">Style</label>
-              <select value={form.style} onChange={(e) => setForm({ ...form, style: e.target.value })}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none">
-                <option value="">Select...</option>
-                <option>Parkland</option><option>Links</option><option>Desert</option>
-                <option>Coastal</option><option>Sandhills</option><option>Stadium</option>
-              </select>
-            </div>
-          </div>
-          <button type="submit" disabled={saving}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 hover:bg-white disabled:opacity-50">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" />Add Course</>}
+        <div className="flex border-b border-zinc-800">
+          <button
+            onClick={() => setTab("places")}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium border-b-2 ${tab === "places" ? "border-emerald-500 text-zinc-100" : "border-transparent text-zinc-500"}`}
+          >
+            Search Google Places
           </button>
-        </form>
+          <button
+            onClick={() => setTab("manual")}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium border-b-2 ${tab === "manual" ? "border-emerald-500 text-zinc-100" : "border-transparent text-zinc-500"}`}
+          >
+            Manual entry
+          </button>
+        </div>
+
+        <div className="p-5 space-y-3">
+          {tab === "places" ? (
+            <>
+              <p className="text-xs text-zinc-500 mb-2">Pick the course on Google. Address + coords come from Google.</p>
+              <PlacesAutocomplete
+                onSelect={handlePlaceSelect}
+                placeholder="Search any course (Pebble Beach, Augusta, etc.)"
+                disabled={saving}
+              />
+              {saving && (
+                <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Adding {selected?.name ?? "course"}...
+                </div>
+              )}
+            </>
+          ) : (
+            <form onSubmit={handleManualSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="text-[11px] text-zinc-500 mb-1 block">Course Name *</label>
+                  <input value={manual.name} onChange={(e) => setManual({ ...manual, name: e.target.value })} required
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-500 mb-1 block">City</label>
+                  <input value={manual.city} onChange={(e) => setManual({ ...manual, city: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-500 mb-1 block">State</label>
+                  <input value={manual.state} onChange={(e) => setManual({ ...manual, state: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-500 mb-1 block">Latitude *</label>
+                  <input value={manual.lat} onChange={(e) => setManual({ ...manual, lat: e.target.value })} required type="number" step="any"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-500 mb-1 block">Longitude *</label>
+                  <input value={manual.lon} onChange={(e) => setManual({ ...manual, lon: e.target.value })} required type="number" step="any"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none" />
+                </div>
+              </div>
+              <button type="submit" disabled={saving}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 hover:bg-white disabled:opacity-50">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" />Add Course</>}
+              </button>
+            </form>
+          )}
+          {errorMsg && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <p>{errorMsg}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

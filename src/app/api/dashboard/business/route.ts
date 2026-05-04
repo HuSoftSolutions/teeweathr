@@ -25,16 +25,24 @@ export async function GET() {
     }
 
     const businessData = businessDoc.data()!;
+    const tier: string = businessData.subscription?.tier || businessData.subscriptionTier || "free";
+    const tierDefaultMax: Record<string, number> = { free: 1, pro: 1, enterprise: 5 };
+    const maxCourses: number =
+      typeof businessData.maxCourses === "number" && businessData.maxCourses > 0
+        ? businessData.maxCourses
+        : (tierDefaultMax[tier] ?? 1);
+
     const business = {
       id: businessDoc.id,
       name: businessData.name || "",
       email: businessData.email || user.email,
-      subscriptionTier: businessData.subscriptionTier || "free",
+      tier,
+      maxCourses,
       embedApiKey: businessData.embedApiKey || "",
       courseIds: businessData.courseIds || [],
     };
 
-    let courses: { id: string; name: string; city?: string; state?: string; holes?: number; lat?: number; lon?: number }[] = [];
+    let courses: { id: string; name: string; city?: string; state?: string; formattedAddress?: string; lat?: number; lon?: number }[] = [];
 
     if (business.courseIds.length > 0) {
       const courseSnapshots = await Promise.all(
@@ -49,7 +57,7 @@ export async function GET() {
             name: d.name || "",
             city: d.city,
             state: d.state,
-            holes: d.holes,
+            formattedAddress: d.formattedAddress,
             lat: d.lat,
             lon: d.lon,
           };

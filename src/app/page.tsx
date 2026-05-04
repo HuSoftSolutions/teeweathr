@@ -486,7 +486,7 @@ function HowItWorks() {
           <p className="text-3xl font-bold text-emerald-600 mb-3">1</p>
           <p className="text-base font-semibold text-zinc-900 mb-1.5">Add your course</p>
           <p className="text-sm text-zinc-600 leading-relaxed">
-            Search for it (we have 16,000+ U.S. courses indexed) or drop in your coordinates. Takes 20 seconds.
+            Find it on Google Places (we pull the address and coordinates for you). Takes 20 seconds.
           </p>
         </div>
         <div className="rounded-2xl border border-zinc-200 bg-white p-6">
@@ -552,7 +552,7 @@ function OwnerROI() {
         <div className="grid grid-cols-2 gap-3">
           {[
             { stat: "30s", label: "to install" },
-            { stat: "16k+", label: "courses indexed" },
+            { stat: "20s", label: "to add your course" },
             { stat: "Hourly", label: "auto-updates" },
             { stat: "NWS", label: "data source" },
           ].map((s) => (

@@ -1,10 +1,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, Code, ArrowRight, Flag } from "lucide-react";
+import { CheckCircle2, Code } from "lucide-react";
 import { verifySession } from "@/lib/firebase/session";
 import { db } from "@/lib/firebase/admin";
 import { CopyKeyButton } from "./copy-key-button";
+import { AddCourseCard } from "./add-course-card";
 
 export default async function WelcomePage() {
   const cookieStore = await cookies();
@@ -42,26 +43,8 @@ export default async function WelcomePage() {
         </div>
       </div>
 
-      {/* ─── Step 1: Add a course ─── */}
-      {!hasCourses && (
-        <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 mb-6">
-          <div className="flex items-start gap-3">
-            <Flag className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <h2 className="text-base font-semibold text-amber-200 mb-1">One more step: pick your course</h2>
-              <p className="text-sm text-zinc-300 mb-4">
-                Search our index of 16,000+ U.S. courses (or add yours manually). The widget needs a course assigned before it can render a forecast.
-              </p>
-              <Link
-                href="/dashboard/courses"
-                className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-amber-400 transition-colors"
-              >
-                Add your course <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
-        </section>
-      )}
+      {/* ─── Step 1: Add a course (Google Places) ─── */}
+      {!hasCourses && <AddCourseCard />}
 
       {/* ─── Step 2: API key ─── */}
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 mb-6">

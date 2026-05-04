@@ -287,6 +287,74 @@ deps: `@upstash/ratelimit`, `@upstash/redis`
   enterprise prices are kept in `PLANS` (hidden from `/pricing`) so private
   checkout links can still be sent to multi-course leads.
 
+### 16. Google Places–based course management
+
+`src/lib/places.ts` (new), `src/components/places-autocomplete.tsx` (new),
+`src/app/api/dashboard/courses/add/route.ts` (new),
+`src/app/dashboard/welcome/add-course-card.tsx` (new),
+`src/app/dashboard/courses/page.tsx`, `src/app/admin/courses/page.tsx`,
+`src/app/api/admin/courses/route.ts`, `src/app/api/dashboard/business/route.ts`,
+landing-page copy + EMBED.md
+
+- Replaces the "16,000+ U.S. courses indexed" model entirely. Customers
+  add their own courses via Google Places autocomplete; coords + address
+  come from Google. We don't maintain a course catalog.
+- **Two API keys** (per Google's recommended pattern):
+  - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — referrer-restricted (Websites),
+    used by the client-side Maps JS + Places Autocomplete
+  - `GOOGLE_MAPS_SERVER_API_KEY` — no referrer restriction, Places API
+    only, used server-side for Place Details lookups
+- New `/api/dashboard/courses/add` endpoint:
+  - Auth: business role
+  - Server fetches Place Details from `places.googleapis.com/v1` using
+    field-mask (cheap basic-tier fields only). **Doesn't trust client
+    lat/lon** — the placeId is the only thing the client provides.
+  - Tier limit check: `business.maxCourses` if set, otherwise tier defaults
+    (`free=1`, `pro=1`, `enterprise=5`)
+  - Dedupes by `placeId`. If the course already exists and is unclaimed,
+    claims it for this business. If it's claimed by someone else,
+    returns 409 with a "contact support" message.
+  - Creates `courses/{slug}` doc, appends to `business.courseIds`, busts
+    `EMBED_CONFIG_TAG`.
+- New `<PlacesAutocomplete>` React component:
+  - Loads `https://maps.googleapis.com/maps/api/js?libraries=places&loading=async`
+    once via a module-scoped promise (safe across StrictMode double-renders)
+  - Uses the legacy `google.maps.places.Autocomplete` widget (stable;
+    the new web-component is moving target)
+  - `establishment` type filter, optional country restriction, returns
+    `{ placeId, name, address }` on selection
+  - Graceful states: loading / ready / error / no-key
+- Welcome page: replaced the static "16k+ index" banner with a live
+  `<AddCourseCard>` that does the autocomplete + POST + `router.refresh()`.
+- `/dashboard/courses`: rewritten as "Your courses" list with usage
+  ("X of Y") + "Add a course" button + reusable add UI (shared shape with
+  the welcome card).
+- `/admin/courses`: AddCourseModal replaced with two-tab modal — Places
+  search (default) or manual lat/lon (fallback for courses Google
+  doesn't have). `/api/admin/courses` POST accepts both `{ placeId }` and
+  legacy `{ name, lat, lon, ... }` shapes; both paths now require admin
+  role (closes a small auth gap).
+- Course schema simplified: `holes` and `par` are now optional/null. Most
+  callers either ignore them or display them when present.
+- Copy: stripped "16,000+ U.S. courses indexed" from landing-page
+  HowItWorks + OwnerROI stat + EMBED.md.
+
+> **You'll need to set this up** before course-add actually works in prod:
+> 1. Enable **Places API (New)** + **Maps JavaScript API** in Google
+>    Cloud Console.
+> 2. Create the **client** API key (Application restriction = Websites,
+>    referrers = your domains + `*.vercel.app/*` + `localhost:3000/*`).
+>    Set as `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` in Vercel.
+> 3. Create a **separate server** API key (Application restriction =
+>    None, API restriction = Places API only). Set as
+>    `GOOGLE_MAPS_SERVER_API_KEY` in Vercel — server-only, never exposed
+>    to the browser.
+> 4. Enable billing on the GCP project. Both keys share the $200/mo
+>    free credit; signup-only volume keeps you well below it.
+> 5. After deploy: hit `POST /api/admin/setup-demo` (DevTools console
+>    on `/admin`) to recreate the Pebble Beach demo course on the new
+>    schema.
+
 ### 15. Lock down `/api/businesses` to admin role + EMBED.md rewrite
 
 `src/app/api/businesses/route.ts`, `EMBED.md`, removed `public/embed-tester.html`
@@ -583,6 +651,9 @@ When deploying or making material infra changes, run through this list.
 - `src/app/api/auth/signup/route.ts` — self-serve signup endpoint
 - `src/app/signup/page.tsx` — signup form
 - `src/app/dashboard/welcome/page.tsx` — post-signup welcome screen
+- `src/lib/places.ts` — Google Places (New) Place Details server helper
+- `src/components/places-autocomplete.tsx` — reusable Places autocomplete UI
+- `src/app/api/dashboard/courses/add/route.ts` — customer-side course add
 - `src/app/embed/page.tsx` — embed widget UI, freshness label, alert banner,
   micro-view alert treatment
 - `src/lib/types.ts` — `WeatherData`, `WeatherAlert`, supporting types

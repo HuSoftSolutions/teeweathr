@@ -13,8 +13,8 @@ to get one. Free tier is supported (with a sponsor ad in the widget).
 ## Quick start
 
 1. **Sign up** at <https://teeweathr.com/signup>.
-2. **Add your course** when prompted (search 16,000+ U.S. courses or add
-   manually with coordinates).
+2. **Add your course** when prompted — search for it on Google Places.
+   We pull the address and coordinates from Google.
 3. **Customize** in your dashboard — pick theme, accent color, format.
 4. **Copy your snippet** from the dashboard's Embed page. It comes
    pre-filled with your API key and the size you chose.
