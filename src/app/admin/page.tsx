@@ -1,5 +1,6 @@
 import { db } from "@/lib/firebase/admin";
 import { Building2, Flag, BarChart3 } from "lucide-react";
+import Link from "next/link";
 
 async function getStats() {
   try {
@@ -50,14 +51,14 @@ export default async function AdminOverview() {
       <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
         <h2 className="text-sm font-semibold text-zinc-400 mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-3">
-          <a href="/admin/businesses"
+          <Link href="/admin/businesses"
             className="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800 transition-colors">
             Manage businesses
-          </a>
-          <a href="/admin/courses"
+          </Link>
+          <Link href="/admin/courses"
             className="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800 transition-colors">
             Manage courses
-          </a>
+          </Link>
         </div>
       </div>
     </div>

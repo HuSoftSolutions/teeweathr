@@ -1,4 +1,5 @@
 import { Flag, Check, X } from "lucide-react";
+import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -73,12 +74,12 @@ export default function PricingPage() {
       {/* Header */}
       <header className="mx-auto max-w-5xl px-6 pt-12 pb-4">
         <div className="flex items-center gap-2.5 mb-12">
-          <a href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+          <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15">
               <Flag className="h-5 w-5 text-emerald-500" />
             </div>
             <span className="text-base font-semibold tracking-tight">TeeWeathr</span>
-          </a>
+          </Link>
         </div>
 
         <div className="text-center mb-16">
@@ -176,8 +177,8 @@ export default function PricingPage() {
             <span className="text-sm font-semibold text-zinc-400">TeeWeathr</span>
           </div>
           <div className="flex gap-6 text-xs text-zinc-600">
-            <a href="/" className="hover:text-zinc-400">Home</a>
-            <a href="/pricing" className="hover:text-zinc-400">Pricing</a>
+            <Link href="/" className="hover:text-zinc-400">Home</Link>
+            <Link href="/pricing" className="hover:text-zinc-400">Pricing</Link>
             <a href="mailto:hello@teeweathr.com" className="hover:text-zinc-400">Contact</a>
           </div>
         </div>

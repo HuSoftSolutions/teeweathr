@@ -64,7 +64,11 @@ const statusColors: Record<string, string> = {
 
 export default function DashboardSubscription() {
   const searchParams = useSearchParams();
-  const [business, setBusiness] = useState<any>(null);
+  const [business, setBusiness] = useState<{
+    plan?: string;
+    subscriptionStatus?: string;
+    trialEnd?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);

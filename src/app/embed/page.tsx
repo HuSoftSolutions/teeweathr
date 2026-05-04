@@ -149,9 +149,10 @@ function statusStyle(status: string): React.CSSProperties {
 
 // ─── Shared day tab logic ───────────────────────────────────────
 
-function DayTabRow({ weather, dayPeriods, selectedDayIndex, onSelectDay, isDark, isCompact }: {
+function DayTabRow({ weather, dayPeriods, selectedDayIndex, onSelectDay, isDark, isCompact, todayStr, tmrwStr }: {
   weather: WeatherData; dayPeriods: WeatherPeriod[]; selectedDayIndex: number;
   onSelectDay: (i: number) => void; isDark: boolean; isCompact?: boolean;
+  todayStr: string; tmrwStr: string;
 }) {
   return (
     <div className={`flex ${isDark ? "border-zinc-800" : "border-zinc-200"} border-b overflow-x-auto`}>
@@ -159,10 +160,8 @@ function DayTabRow({ weather, dayPeriods, selectedDayIndex, onSelectDay, isDark,
         const pIdx = weather.periods.indexOf(period);
         const sel = pIdx === selectedDayIndex;
         const date = new Date(period.startTime);
-        const today = new Date().toDateString();
-        const tmrw = new Date(Date.now() + 86400000).toDateString();
-        const label = date.toDateString() === today ? (isCompact ? "Tod" : "Today")
-          : date.toDateString() === tmrw ? "Tmrw"
+        const label = date.toDateString() === todayStr ? (isCompact ? "Tod" : "Today")
+          : date.toDateString() === tmrwStr ? "Tmrw"
           : date.toLocaleDateString([], { weekday: "short" });
         const dh = getHourlyForDay(weather.hourly, period);
         const db = analyzeTimeBlocks(dh);
@@ -215,18 +214,17 @@ function BlockRow({ block, isDark, compact }: { block: TimeBlock; isDark: boolea
 
 // ─── Micro View (banner + inline badge) ─────────────────────────
 
-function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds }: {
+function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds, todayStr, tmrwStr }: {
   score: number; name: string; isDark: boolean;
   selectedPeriod: WeatherPeriod; onPrev: () => void; onNext: () => void;
   hasPrev: boolean; hasNext: boolean; showAds: boolean;
+  todayStr: string; tmrwStr: string;
 }) {
   const grade = getGrade(score);
   const m = isDark ? "text-zinc-500" : "text-zinc-400";
   const date = new Date(selectedPeriod.startTime);
-  const today = new Date().toDateString();
-  const tmrw = new Date(Date.now() + 86400000).toDateString();
-  const dateLabel = date.toDateString() === today ? "Today"
-    : date.toDateString() === tmrw ? "Tomorrow"
+  const dateLabel = date.toDateString() === todayStr ? "Today"
+    : date.toDateString() === tmrwStr ? "Tomorrow"
     : date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 
   return (
@@ -348,7 +346,12 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useCurrentDay(useCallback(() => { setRefreshKey((k) => k + 1); }, []));
+  const todayStr = useCurrentDay(useCallback(() => { setRefreshKey((k) => k + 1); }, []));
+  const tmrwStr = useMemo(() => {
+    const d = new Date(todayStr);
+    d.setDate(d.getDate() + 1);
+    return d.toDateString();
+  }, [todayStr]);
 
   const fetchWeather = useCallback(async () => {
     if (!lat || !lon) { setError("Missing lat/lon"); setLoading(false); return; }
@@ -431,6 +434,8 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               name={name}
               isDark={isDark}
               showAds={showAds}
+              todayStr={todayStr}
+              tmrwStr={tmrwStr}
               selectedPeriod={selectedPeriod}
               hasPrev={dayPeriods.findIndex((p) => weather.periods.indexOf(p) === selectedDayIndex) > 0}
               hasNext={dayPeriods.findIndex((p) => weather.periods.indexOf(p) === selectedDayIndex) < dayPeriods.length - 1}
@@ -456,7 +461,8 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                 </div>
               </div>
               <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
-                onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark} isCompact />
+                onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark} isCompact
+                todayStr={todayStr} tmrwStr={tmrwStr} />
               {bestBlock && (
                 <p className={`text-[10px] ${m}`}>Best: {bestBlock.name} · {bestBlock.temp.high}°</p>
               )}
@@ -480,7 +486,8 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                 </div>
               </div>
               <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
-                onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark} />
+                onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
+                todayStr={todayStr} tmrwStr={tmrwStr} />
               <div className="flex items-center gap-2">
                 {verdict.status === "go" ? <CheckCircle2 className="h-4 w-4 shrink-0" style={statusStyle("go")} /> :
                  verdict.status === "mixed" ? <AlertTriangle className="h-4 w-4 shrink-0" style={statusStyle("mixed")} /> :
@@ -512,7 +519,8 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                 </div>
               </div>
               <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
-                onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark} />
+                onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
+                todayStr={todayStr} tmrwStr={tmrwStr} />
               {/* Selected date */}
               <p className={`text-xs ${m} -mt-2`}>
                 {new Date(selectedPeriod.startTime).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
