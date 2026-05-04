@@ -21,49 +21,71 @@ interface MinimalAutocompleteCtor {
   }): MinimalAutocomplete;
 }
 
+interface MinimalGoogleMaps {
+  importLibrary?: (name: string) => Promise<unknown>;
+  places?: { Autocomplete: MinimalAutocompleteCtor };
+}
+
 declare global {
   interface Window {
-    google?: {
-      maps?: {
-        places?: { Autocomplete: MinimalAutocompleteCtor };
-      };
-    };
-    __teeWeathrMapsLoading__?: Promise<void>;
+    google?: { maps?: MinimalGoogleMaps };
+    __teeWeathrMapsLoading__?: Promise<MinimalGoogleMaps>;
   }
 }
 
 const SCRIPT_ID = "google-maps-places-script";
 
 // Module-scope so all instances share one script load. Safe across React
-// strict-mode double-renders.
-function loadGoogleMaps(apiKey: string): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if (window.google?.maps?.places) return Promise.resolve();
+// strict-mode double-renders. Resolves to the maps namespace once loaded so
+// callers don't have to re-poll for it.
+function loadGoogleMaps(apiKey: string): Promise<MinimalGoogleMaps> {
+  if (typeof window === "undefined") return Promise.reject(new Error("SSR"));
+  if (window.google?.maps) return Promise.resolve(window.google.maps);
   if (window.__teeWeathrMapsLoading__) return window.__teeWeathrMapsLoading__;
 
-  const promise = new Promise<void>((resolve, reject) => {
-    if (document.getElementById(SCRIPT_ID)) {
-      // Already injected by another instance — wait for it.
-      const check = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(check);
-          resolve();
+  const promise = new Promise<MinimalGoogleMaps>((resolve, reject) => {
+    const onLoad = () => {
+      // Don't trust onload alone — with loading=async the namespace may
+      // not be attached yet. Poll briefly.
+      const start = Date.now();
+      const check = () => {
+        if (window.google?.maps) return resolve(window.google.maps);
+        if (Date.now() - start > 5000) {
+          return reject(new Error("Maps loaded but namespace missing — likely an auth/billing error in console"));
         }
-      }, 50);
-      setTimeout(() => { clearInterval(check); reject(new Error("Maps script timed out")); }, 10_000);
+        setTimeout(check, 25);
+      };
+      check();
+    };
+
+    if (document.getElementById(SCRIPT_ID)) {
+      onLoad();
       return;
     }
     const script = document.createElement("script");
     script.id = SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async&v=weekly`;
+    // Drop loading=async to avoid the timing race with the legacy
+    // Autocomplete widget. The `defer` attribute already gives us
+    // non-blocking parse.
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&v=weekly`;
     script.async = true;
     script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Maps"));
+    script.onload = onLoad;
+    script.onerror = () => reject(new Error("Failed to load Google Maps script"));
     document.head.appendChild(script);
   });
   window.__teeWeathrMapsLoading__ = promise;
   return promise;
+}
+
+async function ensurePlaces(maps: MinimalGoogleMaps): Promise<{ Autocomplete: MinimalAutocompleteCtor }> {
+  if (maps.places?.Autocomplete) return maps.places;
+  // importLibrary handles the case where places lib loads on demand.
+  if (maps.importLibrary) {
+    const lib = (await maps.importLibrary("places")) as { Autocomplete: MinimalAutocompleteCtor };
+    return lib;
+  }
+  throw new Error("Places library unavailable");
 }
 
 export type SelectedPlace = {
@@ -93,18 +115,17 @@ export function PlacesAutocomplete({
     if (!apiKey || !inputRef.current) return;
     let cancelled = false;
     let autocomplete: MinimalAutocomplete | null = null;
-    loadGoogleMaps(apiKey)
-      .then(() => {
+
+    (async () => {
+      try {
+        const maps = await loadGoogleMaps(apiKey);
         if (cancelled) return;
-        const ctor = window.google?.maps?.places?.Autocomplete;
-        if (!ctor || !inputRef.current) {
-          setStatus("error");
-          return;
-        }
-        autocomplete = new ctor(inputRef.current, {
-          // 'establishment' is broader than 'golf_course' but covers more
-          // golf-adjacent results (driving ranges, country clubs). Server
-          // doesn't restrict by type — the human picking it is the filter.
+        const places = await ensurePlaces(maps);
+        if (cancelled || !inputRef.current) return;
+
+        autocomplete = new places.Autocomplete(inputRef.current, {
+          // 'establishment' covers golf courses, country clubs, driving
+          // ranges, etc. The human picking it is the filter.
           types: ["establishment"],
           fields: ["place_id", "name", "formatted_address"],
           ...(countryRestriction ? { componentRestrictions: { country: countryRestriction } } : {}),
@@ -119,10 +140,19 @@ export function PlacesAutocomplete({
           });
         });
         setStatus("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setStatus("error");
-      });
+      } catch (err) {
+        if (cancelled) return;
+        // Surface the real error in the browser console — almost always
+        // an auth/referrer/billing problem on the API key. Google itself
+        // also prints a detailed error to the console (e.g.
+        // "ApiNotActivatedMapError", "RefererNotAllowedMapError",
+        // "BillingNotEnabledMapError").
+        // eslint-disable-next-line no-console
+        console.error("[PlacesAutocomplete]", err);
+        setStatus("error");
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
