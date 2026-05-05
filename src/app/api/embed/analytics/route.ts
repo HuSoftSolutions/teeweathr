@@ -4,6 +4,10 @@ import { FieldValue } from "firebase-admin/firestore";
 import { isDemoApiKey } from "@/lib/demo";
 import { logger } from "@/lib/logger";
 
+// Helper for the GET path — kept narrow so a single failure mode
+// (e.g. a missing Firestore composite index) returns a real JSON
+// response instead of an empty 500 body that breaks client `.json()`.
+
 const VALID_EVENTS = new Set(["view", "interaction", "referral"]);
 const MAX_BATCH = 100;
 
@@ -80,7 +84,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const apiKey = searchParams.get("apiKey");
-  const monthsBack = parseInt(searchParams.get("months") || "1", 10);
+  const monthsBack = Math.max(1, Math.min(12, parseInt(searchParams.get("months") || "1", 10) || 1));
 
   if (!apiKey) {
     return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
@@ -93,14 +97,25 @@ export async function GET(req: NextRequest) {
     months.push(d.toISOString().slice(0, 7));
   }
 
-  const snapshot = await db
-    .collection("analytics")
-    .where("apiKey", "==", apiKey)
-    .where("month", "in", months)
-    .orderBy("month", "desc")
-    .get();
-
-  const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-
-  return NextResponse.json({ analytics: docs });
+  try {
+    const snapshot = await db
+      .collection("analytics")
+      .where("apiKey", "==", apiKey)
+      .where("month", "in", months)
+      .orderBy("month", "desc")
+      .get();
+    const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return NextResponse.json({ analytics: docs });
+  } catch (err) {
+    // Firestore can throw FAILED_PRECONDITION here if the composite index
+    // for (apiKey + month + orderBy month) hasn't been built yet, plus any
+    // transient infra error. Either way, return a real JSON response so
+    // the dashboard's .json() doesn't blow up on an empty body.
+    logger.error("analytics_query_failed", {
+      route: "/api/embed/analytics",
+      apiKey,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json({ analytics: [], error: "analytics-temporarily-unavailable" });
+  }
 }

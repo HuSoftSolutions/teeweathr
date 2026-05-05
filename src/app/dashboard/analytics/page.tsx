@@ -108,7 +108,7 @@ export default function DashboardAnalyticsPage() {
 
   if (!hasData) {
     return (
-      <div className="p-8">
+      <div className="p-8 max-w-7xl">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-100 mb-1">Analytics</h1>
         <p className="text-sm text-zinc-400 mb-8">Track embed performance and engagement</p>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-12 text-center">
@@ -127,7 +127,7 @@ export default function DashboardAnalyticsPage() {
   ];
 
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-7xl">
       <h1 className="text-2xl font-bold tracking-tight text-zinc-100 mb-1">Analytics</h1>
       <p className="text-sm text-zinc-400 mb-8">Track embed performance and engagement</p>
 

@@ -42,7 +42,7 @@ export default function DashboardEmbed() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-7xl">
       <h1 className="text-2xl font-bold tracking-tight mb-1">Embed Widget</h1>
       <p className="text-sm text-zinc-500 mb-8">Add TeeWeathr to your website, social media, or emails</p>
 

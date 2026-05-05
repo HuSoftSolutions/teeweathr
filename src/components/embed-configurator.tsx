@@ -10,7 +10,7 @@ interface EmbedCourse {
   name: string;
   lat: number;
   lon: number;
-  holes: number;
+  holes?: number;
   par?: number;
 }
 
@@ -54,7 +54,7 @@ const FORMAT_DEFAULTS: Record<EmbedFormat, { width: string; height: string }> = 
   card: { width: "380px", height: "480px" },
   corner: { width: "360px", height: "460px" },
   banner: { width: "100%", height: "80px" },
-  inline: { width: "200px", height: "60px" },
+  inline: { width: "400px", height: "60px" },
 };
 
 // ─── Code Generators ────────────────────────────────────────────
@@ -75,9 +75,9 @@ function generatePreviewUrl(course: EmbedCourse, config: EmbedConfig, baseUrl: s
     lat: course.lat.toString(),
     lon: course.lon.toString(),
     name: course.name,
-    holes: course.holes.toString(),
     theme: config.theme,
   });
+  if (course.holes != null) params.set("holes", course.holes.toString());
   if (course.par) params.set("par", course.par.toString());
   if (config.accent !== "default") params.set("accent", config.accent);
   if (tier === "free") params.set("ads", "true");
