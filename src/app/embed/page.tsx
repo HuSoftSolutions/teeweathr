@@ -440,12 +440,19 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   }, [lat, lon, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    // When a key is provided, lat/lon arrive asynchronously from
+    // /api/embed/[key]. Wait for that fetch before declaring coords missing,
+    // otherwise we flash "Missing lat/lon" on every keyed embed load.
+    if (apiKey && configLoading) return;
+
     if (!lat || !lon) {
       queueMicrotask(() => { setError("Missing lat/lon"); setLoading(false); });
       return;
     }
+    // Clear any prior "missing" error from a render before serverConfig arrived.
+    setError(null);
     queueMicrotask(() => { fetchWeather(); });
-  }, [fetchWeather, lat, lon]);
+  }, [fetchWeather, lat, lon, apiKey, configLoading]);
 
   const topAlert = alerts[0] ?? null;
   const hasBlockingAlert = topAlert?.level === "blocking";

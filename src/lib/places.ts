@@ -67,7 +67,15 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetailsResu
 
     if (res.status === 404) return { ok: false, reason: "not-found" };
     if (!res.ok) {
-      logger.warn("places_fetch_failed", { status: res.status, placeId });
+      // Capture Google's actual error message for diagnosis. Common shapes:
+      //   { error: { code, message, status } }
+      //   { error_message: "...", status: "REQUEST_DENIED" }
+      const bodyText = await res.text().catch(() => "");
+      logger.warn("places_fetch_failed", {
+        status: res.status,
+        placeId,
+        body: bodyText.slice(0, 500),
+      });
       return { ok: false, reason: "fetch-failed", status: res.status };
     }
 

@@ -1,29 +1,58 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MapPin, Search } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 
-// Minimal types so we don't need @types/google.maps installed.
-interface MinimalAutocomplete {
-  addListener: (event: string, cb: () => void) => void;
-  getPlace: () => {
-    place_id?: string;
-    name?: string;
-    formatted_address?: string;
-  } | null;
+// Migrated to PlaceAutocompleteElement (the new web-component-based widget).
+// As of March 2025, Google deprecated the legacy google.maps.places.Autocomplete
+// for new GCP projects, so the old widget literally won't authorize on a
+// freshly-provisioned key. The new element only needs Places API (New).
+
+// Minimal types so we don't need @types/google.maps installed. The actual
+// surface area is wider; we type only what we touch.
+interface GooglePlace {
+  id: string;
+  displayName?: string;
+  formattedAddress?: string;
+  fetchFields(opts: { fields: string[] }): Promise<unknown>;
 }
 
-interface MinimalAutocompleteCtor {
-  new (input: HTMLInputElement, opts: {
-    types?: string[];
-    fields?: string[];
-    componentRestrictions?: { country?: string | string[] };
-  }): MinimalAutocomplete;
+interface PlacePrediction {
+  toPlace(): GooglePlace;
+  placeId?: string;
+  text?: { text?: string } | string;
+}
+
+// The shape varies across Maps JS versions:
+//   - { detail: { placePrediction } } → call .toPlace() then fetchFields
+//   - { detail: { place } } → already a Place, fetchFields directly
+//   - top-level { placePrediction } / { place } on the event itself
+// We probe all four below.
+type LooseSelectEvent = Event & {
+  detail?: { placePrediction?: PlacePrediction; place?: GooglePlace };
+  placePrediction?: PlacePrediction;
+  place?: GooglePlace;
+};
+
+// The custom element we instantiate. Properties below are documented on
+// Google's Places web-components reference.
+interface PlaceAutocompleteEl extends HTMLElement {
+  includedPrimaryTypes?: string[];
+  includedRegionCodes?: string[];
+  requestedLanguage?: string;
+}
+
+interface PlaceAutocompleteCtor {
+  new (): PlaceAutocompleteEl;
+}
+
+interface MinimalPlaces {
+  PlaceAutocompleteElement?: PlaceAutocompleteCtor;
 }
 
 interface MinimalGoogleMaps {
   importLibrary?: (name: string) => Promise<unknown>;
-  places?: { Autocomplete: MinimalAutocompleteCtor };
+  places?: MinimalPlaces;
 }
 
 declare global {
@@ -35,9 +64,6 @@ declare global {
 
 const SCRIPT_ID = "google-maps-places-script";
 
-// Module-scope so all instances share one script load. Safe across React
-// strict-mode double-renders. Resolves to the maps namespace once loaded so
-// callers don't have to re-poll for it.
 function loadGoogleMaps(apiKey: string): Promise<MinimalGoogleMaps> {
   if (typeof window === "undefined") return Promise.reject(new Error("SSR"));
   if (window.google?.maps) return Promise.resolve(window.google.maps);
@@ -45,8 +71,6 @@ function loadGoogleMaps(apiKey: string): Promise<MinimalGoogleMaps> {
 
   const promise = new Promise<MinimalGoogleMaps>((resolve, reject) => {
     const onLoad = () => {
-      // Don't trust onload alone — with loading=async the namespace may
-      // not be attached yet. Poll briefly.
       const start = Date.now();
       const check = () => {
         if (window.google?.maps) return resolve(window.google.maps);
@@ -64,9 +88,6 @@ function loadGoogleMaps(apiKey: string): Promise<MinimalGoogleMaps> {
     }
     const script = document.createElement("script");
     script.id = SCRIPT_ID;
-    // Drop loading=async to avoid the timing race with the legacy
-    // Autocomplete widget. The `defer` attribute already gives us
-    // non-blocking parse.
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&v=weekly`;
     script.async = true;
     script.defer = true;
@@ -78,14 +99,13 @@ function loadGoogleMaps(apiKey: string): Promise<MinimalGoogleMaps> {
   return promise;
 }
 
-async function ensurePlaces(maps: MinimalGoogleMaps): Promise<{ Autocomplete: MinimalAutocompleteCtor }> {
-  if (maps.places?.Autocomplete) return maps.places;
-  // importLibrary handles the case where places lib loads on demand.
+async function ensurePlaceElement(maps: MinimalGoogleMaps): Promise<PlaceAutocompleteCtor> {
+  if (maps.places?.PlaceAutocompleteElement) return maps.places.PlaceAutocompleteElement;
   if (maps.importLibrary) {
-    const lib = (await maps.importLibrary("places")) as { Autocomplete: MinimalAutocompleteCtor };
-    return lib;
+    const lib = (await maps.importLibrary("places")) as MinimalPlaces;
+    if (lib.PlaceAutocompleteElement) return lib.PlaceAutocompleteElement;
   }
-  throw new Error("Places library unavailable");
+  throw new Error("PlaceAutocompleteElement unavailable — ensure Places API (New) is enabled");
 }
 
 export type SelectedPlace = {
@@ -105,48 +125,86 @@ export function PlacesAutocomplete({
   countryRestriction?: string | string[];
   disabled?: boolean;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const [status, setStatus] = useState<"loading" | "ready" | "error" | "no-key">(
     apiKey ? "loading" : "no-key"
   );
 
   useEffect(() => {
-    if (!apiKey || !inputRef.current) return;
+    if (!apiKey || !containerRef.current) return;
     let cancelled = false;
-    let autocomplete: MinimalAutocomplete | null = null;
+    let element: PlaceAutocompleteEl | null = null;
 
     (async () => {
       try {
         const maps = await loadGoogleMaps(apiKey);
         if (cancelled) return;
-        const places = await ensurePlaces(maps);
-        if (cancelled || !inputRef.current) return;
+        const Ctor = await ensurePlaceElement(maps);
+        if (cancelled || !containerRef.current) return;
 
-        autocomplete = new places.Autocomplete(inputRef.current, {
-          // 'establishment' covers golf courses, country clubs, driving
-          // ranges, etc. The human picking it is the filter.
-          types: ["establishment"],
-          fields: ["place_id", "name", "formatted_address"],
-          ...(countryRestriction ? { componentRestrictions: { country: countryRestriction } } : {}),
-        });
-        autocomplete.addListener("place_changed", () => {
-          const p = autocomplete!.getPlace();
-          if (!p?.place_id) return;
-          onSelect({
-            placeId: p.place_id,
-            name: p.name ?? "",
-            address: p.formatted_address ?? "",
-          });
-        });
+        const el = new Ctor();
+        // No primary-type filter — the new Places API uses a stricter
+        // "Table A" type list and 'establishment' (Table B from the legacy
+        // API) silently drops every result. The user typing the course
+        // name is filter enough.
+        if (countryRestriction) {
+          const codes = Array.isArray(countryRestriction) ? countryRestriction : [countryRestriction];
+          el.includedRegionCodes = codes.map((c) => c.toUpperCase());
+        }
+        if (placeholder) {
+          // The inner input picks up the placeholder via the attribute.
+          el.setAttribute("placeholder", placeholder);
+        }
+
+        // Style hooks for our dark theme. The element renders its own input
+        // inside shadow DOM; we expose CSS variables it respects + match the
+        // outer wrapper to our zinc theme. Final polish comes from the
+        // wrapper div's classes below.
+        el.style.width = "100%";
+
+        containerRef.current.appendChild(el);
+        element = el;
+
+        const handleSelect = async (ev: Event) => {
+          const e = ev as LooseSelectEvent;
+          // eslint-disable-next-line no-console
+          console.log("[PlacesAutocomplete] selection event", ev.type, { detail: e.detail, top: { placePrediction: e.placePrediction, place: e.place } });
+
+          // Defensively extract a Place across API surface variants.
+          let place: GooglePlace | null =
+            e.detail?.place ??
+            e.place ??
+            (e.detail?.placePrediction ? e.detail.placePrediction.toPlace() : null) ??
+            (e.placePrediction ? e.placePrediction.toPlace() : null);
+
+          if (!place) {
+            // eslint-disable-next-line no-console
+            console.error("[PlacesAutocomplete] could not extract Place from event", ev);
+            return;
+          }
+
+          try {
+            await place.fetchFields({ fields: ["id", "displayName", "formattedAddress"] });
+            if (cancelled) return;
+            onSelect({
+              placeId: place.id,
+              name: place.displayName ?? "",
+              address: place.formattedAddress ?? "",
+            });
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error("[PlacesAutocomplete] place fetch failed", err);
+          }
+        };
+        // Listen for both names — Google has shipped both. Older docs say
+        // gmp-placeselect; current docs say gmp-select.
+        el.addEventListener("gmp-select", handleSelect);
+        el.addEventListener("gmp-placeselect", handleSelect);
+
         setStatus("ready");
       } catch (err) {
         if (cancelled) return;
-        // Surface the real error in the browser console — almost always
-        // an auth/referrer/billing problem on the API key. Google itself
-        // also prints a detailed error to the console (e.g.
-        // "ApiNotActivatedMapError", "RefererNotAllowedMapError",
-        // "BillingNotEnabledMapError").
         // eslint-disable-next-line no-console
         console.error("[PlacesAutocomplete]", err);
         setStatus("error");
@@ -155,8 +213,11 @@ export function PlacesAutocomplete({
 
     return () => {
       cancelled = true;
+      if (element && element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
     };
-  }, [apiKey, onSelect, countryRestriction]);
+  }, [apiKey, onSelect, countryRestriction, placeholder]);
 
   if (status === "no-key") {
     return (
@@ -167,16 +228,11 @@ export function PlacesAutocomplete({
   }
 
   return (
-    <div className="relative">
-      <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-      <input
-        ref={inputRef}
-        type="text"
-        placeholder={placeholder}
-        disabled={disabled || status !== "ready"}
-        className="w-full rounded-lg border border-zinc-800 bg-zinc-900 pl-9 pr-10 py-2.5 text-sm text-zinc-100 outline-none focus:border-zinc-600 disabled:opacity-50"
-        autoComplete="off"
-      />
+    <div className="relative" aria-disabled={disabled}>
+      {/* The Place Autocomplete element renders inside this wrapper. The
+          element manages its own input + dropdown. Wrapper provides our
+          rounded border + dark background; element handles the rest. */}
+      <div ref={containerRef} className="places-autocomplete-host" />
       {status === "loading" && (
         <Loader2 className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 animate-spin" />
       )}
