@@ -369,23 +369,60 @@ export default function Home() {
       }
 
       try {
+        // Fast path for URL deep-links: fetch ONLY the linked course
+        // first and render it immediately. Background-load nearby +
+        // favorites afterward so they pop in as additional tabs without
+        // delaying the user's primary forecast.
+        //
+        // Without this, Promise.all waited for the slowest of 6 weather
+        // calls (NWS cold-cache hits can run 3+ seconds) before the
+        // user could see the course they actually clicked.
+        if (urlCourse) {
+          const primary = await fetchCourse(urlCourse);
+          if (!primary) { setError("Could not load weather."); setLoading(false); return; }
+          setCourses([primary]);
+          setSelected(primary);
+          setLoading(false);
+
+          // Hydrate the rest in the background.
+          (async () => {
+            try {
+              const res = await fetch(`/api/courses?lat=${loc.lat}&lon=${loc.lon}`);
+              const data = await res.json();
+              const nearbyRaw: GolfCourse[] = (data.courses || []).slice(0, 3);
+              // Dedupe by coords — the URL course is also the nearest
+              // course in our index, so the lat/lon search returns it
+              // again under a different id. Skip those to avoid a
+              // duplicate weather fetch + duplicate tab.
+              const sameAsUrl = (c: GolfCourse) =>
+                Math.abs(c.lat - urlCourse.lat) < 1e-3 &&
+                Math.abs(c.lon - urlCourse.lon) < 1e-3;
+              const nearby = nearbyRaw.filter((c) => !sameAsUrl(c));
+              const favCourses = favorites.filter(
+                (f) => !sameAsUrl(f) && !nearby.some((n) => n.id === f.id),
+              );
+              const others = [...favCourses, ...nearby].slice(0, 5);
+              if (!others.length) return;
+              const results = await Promise.all(others.map(fetchCourse));
+              const valid = results.filter(Boolean) as CourseWeather[];
+              if (valid.length) setCourses((prev) => [...prev, ...valid]);
+            } catch { /* background — surface nothing */ }
+          })();
+          return;
+        }
+
         const res = await fetch(`/api/courses?lat=${loc.lat}&lon=${loc.lon}`);
         const data = await res.json();
         const nearby: GolfCourse[] = (data.courses || []).slice(0, 3);
-        // If we came from a deep link, prepend that course so it's the
-        // primary tab and the user lands on it directly.
         const favCourses = favorites.filter((f) => !nearby.some((n) => n.id === f.id));
-        const seedList = urlCourse ? [urlCourse, ...favCourses, ...nearby] : [...favCourses, ...nearby];
-        const all = seedList.slice(0, 6);
+        const all = [...favCourses, ...nearby].slice(0, 6);
         if (!all.length) { setError("No courses found nearby."); setLoading(false); return; }
         const results = await Promise.all(all.map(fetchCourse));
         const valid = results.filter(Boolean) as CourseWeather[];
         if (!valid.length) { setError("Could not load weather."); setLoading(false); return; }
         setCourses(valid);
-        // Default to URL-deep-linked course, then first favorite, then first nearby.
-        const linked = urlCourse ? valid.find((cw) => cw.course.id === urlCourse.id) : null;
         const favResult = valid.find((cw) => isFavorite(cw.course.id));
-        setSelected(linked || favResult || valid[0]);
+        setSelected(favResult || valid[0]);
       } catch { setError("Failed to load courses."); }
       finally { setLoading(false); }
     }
