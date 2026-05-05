@@ -5,6 +5,7 @@ import {
   Palette, Zap, Smartphone, ShieldCheck,
 } from "lucide-react";
 import { LiveTry } from "@/components/marketing/live-try";
+import { CourseSearch } from "@/components/marketing/course-search";
 import { DEMO_API_KEY } from "@/lib/demo";
 
 // ─── Nav ─────────────────────────────────────────────────────────
@@ -41,7 +42,11 @@ function Nav() {
 
 // ─── Hero ────────────────────────────────────────────────────────
 
-function Hero() {
+// Top hero — public-facing course search. The general public lands here
+// and finds weather for any course in the network. Businesses get a
+// discrete bridge link at the bottom that scrolls them to the operator-
+// targeted pitch below.
+function SearchHero() {
   return (
     <section className="relative overflow-hidden">
       <div
@@ -52,36 +57,70 @@ function Hero() {
             "radial-gradient(900px 400px at 50% -10%, rgba(16,185,129,0.18), transparent 60%), radial-gradient(700px 300px at 90% 20%, rgba(16,185,129,0.10), transparent 70%)",
         }}
       />
-      <div className="mx-auto max-w-6xl px-5 pt-16 sm:pt-24 pb-12 text-center">
+      <div className="mx-auto max-w-4xl px-5 pt-16 sm:pt-24 pb-12 text-center">
         <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 uppercase tracking-wider mb-6">
-          <Flag className="h-3 w-3" /> Built for golf courses
+          <Flag className="h-3 w-3" /> Honest weather for golfers
         </div>
-        <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-zinc-900 max-w-4xl mx-auto leading-[1.05]">
-          Golf weather.<br />
-          <span className="text-zinc-400">Not weather-app weather.</span>
+        <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-zinc-900 max-w-3xl mx-auto leading-[1.05]">
+          Find your course&rsquo;s<br />
+          <span className="text-emerald-600">real golf forecast.</span>
         </h1>
-        <p className="mt-6 text-base sm:text-lg text-zinc-600 max-w-2xl mx-auto leading-relaxed">
-          Generic forecasts say <span className="text-zinc-900 font-medium">&ldquo;70% rain all day&rdquo;</span> for a thirty-minute morning shower. Golfers cancel. Your tee sheet empties.
-          <span className="text-zinc-900 font-medium"> TeeWeathr</span> tells the truth — a golf-specific A–F grade so the rounds that should get played, get played.
+        <p className="mt-6 text-base sm:text-lg text-zinc-600 max-w-xl mx-auto leading-relaxed">
+          Hour-by-hour playability — wind, rain, lightning, dew — graded A through F so you know whether to tee it up or stay home.
         </p>
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors px-5 py-3 rounded-lg shadow-sm"
-          >
-            Embed on your course site <ArrowRight className="h-4 w-4" />
-          </Link>
+        <div className="mt-8">
+          <CourseSearch />
+        </div>
+        <p className="mt-4 text-xs text-zinc-500">
+          National Weather Service data · No location services required
+        </p>
+        <div className="mt-12 flex items-center justify-center">
           <a
-            href="#try-it"
-            className="inline-flex items-center gap-2 text-sm font-medium text-zinc-700 hover:text-zinc-900 px-5 py-3 rounded-lg border border-zinc-300 hover:border-zinc-400 bg-white transition-colors"
+            href="#for-business"
+            className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-900 transition-colors"
           >
-            Try it on a real course
+            Are you a golf course wanting to integrate? <ArrowRight className="h-3 w-3" />
           </a>
         </div>
-        <p className="mt-5 text-xs text-zinc-500">
-          National Weather Service data · 30-second install · Free tier available
-        </p>
       </div>
+    </section>
+  );
+}
+
+// Business-targeted intro — the original "Golf weather. Not weather-app
+// weather." pitch, now framed as the start of the operator-facing
+// section. Anchored as #for-business for the bridge link in SearchHero.
+function BusinessIntro() {
+  return (
+    <section id="for-business" className="border-t border-zinc-200 mx-auto max-w-6xl px-5 pt-20 pb-12 text-center">
+      <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 uppercase tracking-wider mb-6">
+        <Flag className="h-3 w-3" /> Built for golf courses
+      </div>
+      <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900 max-w-4xl mx-auto leading-[1.05]">
+        Golf weather.<br />
+        <span className="text-zinc-400">Not weather-app weather.</span>
+      </h2>
+      <p className="mt-6 text-base sm:text-lg text-zinc-600 max-w-2xl mx-auto leading-relaxed">
+        Generic forecasts say <span className="text-zinc-900 font-medium">&ldquo;70% rain all day&rdquo;</span> for a thirty-minute morning shower. Golfers cancel. Your tee sheet empties.
+        <span className="text-zinc-900 font-medium"> TeeWeathr</span> tells the truth — a golf-specific A–F grade so the rounds that should get played, get played.
+      </p>
+      <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <Link
+          href="/signup"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors px-5 py-3 rounded-lg shadow-sm"
+        >
+          Embed on your course site <ArrowRight className="h-4 w-4" />
+        </Link>
+        <a
+          href="#try-it"
+          className="inline-flex items-center gap-2 text-sm font-medium text-zinc-700 hover:text-zinc-900 px-5 py-3 rounded-lg border border-zinc-300 hover:border-zinc-400 bg-white transition-colors"
+        >
+          See it on a real course
+        </a>
+      </div>
+      <p className="mt-5 text-xs text-zinc-500">
+        30-second install · Free tier available · No card required
+      </p>
     </section>
   );
 }
@@ -716,7 +755,10 @@ export default function HomePage() {
     <div className="min-h-screen bg-white text-zinc-900">
       <Nav />
       <main>
-        <Hero />
+        {/* Public-facing — search any course in our network */}
+        <SearchHero />
+        {/* Operator-facing — bridge link in SearchHero scrolls here */}
+        <BusinessIntro />
         <TrySection />
         <Comparison />
         <Features />

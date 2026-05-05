@@ -333,28 +333,59 @@ export default function Home() {
   useEffect(() => {
     if (!favsLoaded) return;
     async function init() {
+      // If the URL carries ?lat=&lon=&name=, use those (e.g. from the
+      // landing-page "See the full forecast" link) and skip the
+      // geolocation prompt entirely.
       let loc: { lat: number; lon: number } | null = null;
-      try {
-        const pos = await new Promise<GeolocationPosition>((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 }));
-        loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        setUserLocation(loc);
-      } catch { loc = { lat: 39.8283, lon: -98.5795 }; }
+      let urlCourse: GolfCourse | null = null;
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        const latStr = sp.get("lat");
+        const lonStr = sp.get("lon");
+        const nameParam = sp.get("name");
+        const latNum = latStr ? parseFloat(latStr) : NaN;
+        const lonNum = lonStr ? parseFloat(lonStr) : NaN;
+        if (Number.isFinite(latNum) && Number.isFinite(lonNum)) {
+          loc = { lat: latNum, lon: lonNum };
+          setUserLocation(loc);
+          if (nameParam) {
+            urlCourse = {
+              id: `url-${latNum.toFixed(4)}-${lonNum.toFixed(4)}`,
+              name: nameParam,
+              lat: latNum,
+              lon: lonNum,
+            } as GolfCourse;
+          }
+        }
+      }
+
+      if (!loc) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 }));
+          loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          setUserLocation(loc);
+        } catch { loc = { lat: 39.8283, lon: -98.5795 }; }
+      }
 
       try {
         const res = await fetch(`/api/courses?lat=${loc.lat}&lon=${loc.lon}`);
         const data = await res.json();
         const nearby: GolfCourse[] = (data.courses || []).slice(0, 3);
+        // If we came from a deep link, prepend that course so it's the
+        // primary tab and the user lands on it directly.
         const favCourses = favorites.filter((f) => !nearby.some((n) => n.id === f.id));
-        const all = [...favCourses, ...nearby].slice(0, 6);
+        const seedList = urlCourse ? [urlCourse, ...favCourses, ...nearby] : [...favCourses, ...nearby];
+        const all = seedList.slice(0, 6);
         if (!all.length) { setError("No courses found nearby."); setLoading(false); return; }
         const results = await Promise.all(all.map(fetchCourse));
         const valid = results.filter(Boolean) as CourseWeather[];
         if (!valid.length) { setError("Could not load weather."); setLoading(false); return; }
         setCourses(valid);
-        // Default to first favorite, or first nearby
+        // Default to URL-deep-linked course, then first favorite, then first nearby.
+        const linked = urlCourse ? valid.find((cw) => cw.course.id === urlCourse.id) : null;
         const favResult = valid.find((cw) => isFavorite(cw.course.id));
-        setSelected(favResult || valid[0]);
+        setSelected(linked || favResult || valid[0]);
       } catch { setError("Failed to load courses."); }
       finally { setLoading(false); }
     }

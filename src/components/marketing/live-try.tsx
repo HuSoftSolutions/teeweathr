@@ -144,7 +144,7 @@ export function LiveTry() {
             </div>
           )}
           <a
-            href={`/forecast`}
+            href={`/forecast?lat=${result.course.lat}&lon=${result.course.lon}&name=${encodeURIComponent(result.course.name)}`}
             className="mt-4 inline-flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 transition-colors"
           >
             See the full forecast <ArrowRight className="h-3.5 w-3.5" />
