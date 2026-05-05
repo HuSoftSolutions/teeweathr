@@ -55,6 +55,16 @@ function RainLabel({ precip, label }: { precip: number; label: string }) {
 // Ad slot for free-tier embeds — fetches from /api/ads/serve
 type AdVariant = "micro" | "compact" | "default";
 
+// Normalize the ad's click URL so a value like "pebblebeach.com/promo"
+// (missing scheme) doesn't get treated as a path relative to the current
+// host. Anchors, query strings, and mailto:/tel: links are preserved.
+function normalizeAdUrl(raw: string): string {
+  const v = raw.trim();
+  if (!v) return "#";
+  if (/^(https?:|mailto:|tel:|#|\/)/i.test(v)) return v;
+  return `https://${v}`;
+}
+
 function AdSlot({ isDark, variant = "default" }: { isDark: boolean; variant?: AdVariant }) {
   const [ad, setAd] = useState<{ sponsor: string; text: string; clickUrl: string; imageUrl?: string } | null>(null);
 
@@ -66,11 +76,12 @@ function AdSlot({ isDark, variant = "default" }: { isDark: boolean; variant?: Ad
   }, []);
 
   if (!ad) return null;
+  const href = normalizeAdUrl(ad.clickUrl);
 
   // Micro: single-line sponsor strip pinned to bottom of widget
   if (variant === "micro") {
     return (
-      <a href={ad.clickUrl} target="_blank" rel="noopener noreferrer sponsored"
+      <a href={href} target="_blank" rel="noopener noreferrer sponsored"
         className={`flex items-center gap-1.5 px-3 py-1 border-t shrink-0 transition-colors ${
           isDark
             ? "border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/80"
@@ -90,7 +101,7 @@ function AdSlot({ isDark, variant = "default" }: { isDark: boolean; variant?: Ad
   // Compact: smaller image, tighter padding, no big "Go" pill
   if (variant === "compact") {
     return (
-      <a href={ad.clickUrl} target="_blank" rel="noopener noreferrer sponsored"
+      <a href={href} target="_blank" rel="noopener noreferrer sponsored"
         className={`flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
           isDark
             ? "bg-zinc-800/80 hover:bg-zinc-800"
@@ -110,7 +121,7 @@ function AdSlot({ isDark, variant = "default" }: { isDark: boolean; variant?: Ad
 
   // Default (medium + full)
   return (
-    <a href={ad.clickUrl} target="_blank" rel="noopener noreferrer sponsored"
+    <a href={href} target="_blank" rel="noopener noreferrer sponsored"
       className={`flex items-center gap-2.5 rounded-lg px-3 py-2 mt-1 transition-colors ${
         isDark
           ? "bg-zinc-800/80 hover:bg-zinc-800"
