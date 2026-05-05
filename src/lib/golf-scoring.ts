@@ -177,7 +177,7 @@ const CAUTION_KEYWORDS = [
   "dense fog", "freezing rain", "ice",
 ];
 
-function detectDanger(forecast: string): { level: DangerLevel; keyword: string | null } {
+export function detectDanger(forecast: string): { level: DangerLevel; keyword: string | null } {
   const f = forecast.toLowerCase();
   for (const kw of DANGER_KEYWORDS) {
     if (f.includes(kw)) return { level: "danger", keyword: kw };

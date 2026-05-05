@@ -1,9 +1,10 @@
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
-import type { WeatherData, WeatherPeriod } from "@/lib/types";
+import type { DangerLevel, WeatherData, WeatherPeriod } from "@/lib/types";
 import {
   analyzeDayVerdict,
   analyzeTimeBlocks,
+  detectDanger,
   getGrade,
   getHourlyForDay,
   type TimeBlock,
@@ -30,10 +31,36 @@ type ShareFormat = "daily" | "weekly" | "hourly";
 type ShareSize = keyof typeof SIZES;
 type Theme = "dark" | "light";
 
+// Color ramp for letter grades. Avoid red entirely — even on bad days the
+// imagery is for golfers, not emergency alerts. Anything below "fair"
+// drops into amber, and dangerous-weather blocks render a warning icon
+// (see WarningTriangle) instead of a letter.
+const WARNING_AMBER = "#f59e0b";
 function gradeColor(score: number, accent: string): string {
   if (score >= 60) return accent;
   if (score >= 40) return "#fbbf24";
-  return "#f87171";
+  return WARNING_AMBER;
+}
+
+// Lightning-risk indicator. Replaces the letter grade for any cell whose
+// forecast text triggers detectDanger() — the user-facing message is
+// "stay off the course", and the visual needs to match without screaming
+// red F at the viewer.
+//
+// Built with two filled SVG paths instead of strokes because satori
+// renders stroke unreliably (especially at large sizes — the bounding
+// box flood-fills). Outer triangle is amber; the "!" is cut out via
+// fill-rule: evenodd against an inner amber rectangle + dot.
+function WarningTriangle({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <path
+        fill={WARNING_AMBER}
+        fillRule="evenodd"
+        d="M50 8 L94 88 L6 88 Z M46 35 L54 35 L54 62 L46 62 Z M46 70 L54 70 L54 78 L46 78 Z"
+      />
+    </svg>
+  );
 }
 
 // Pull canonical config + weather server-side via the existing internal
@@ -152,6 +179,7 @@ function DailyTemplate({
   blocks,
   bestBlock,
   headline,
+  dangerLevel,
   dateLabel,
   showWatermark,
 }: {
@@ -162,6 +190,7 @@ function DailyTemplate({
   blocks: TimeBlock[];
   bestBlock: TimeBlock | null;
   headline: string;
+  dangerLevel: DangerLevel;
   dateLabel: string;
   showWatermark: boolean;
 }) {
@@ -215,7 +244,7 @@ function DailyTemplate({
               lineHeight: 1,
             }}
           >
-            {heroGrade}
+            {dangerLevel === "danger" ? <WarningTriangle size={s.gradeBig} /> : heroGrade}
           </div>
           <div style={{ display: "flex", flexDirection: "column", flex: 1, color: text }}>
             <div style={{ display: "flex", fontSize: headlineSize, fontWeight: 600, lineHeight: 1.15 }}>
@@ -257,7 +286,7 @@ function DailyTemplate({
                   lineHeight: 1,
                 }}
               >
-                {b.grade.letter}
+                {b.danger ? <WarningTriangle size={blockGradeSize} /> : b.grade.letter}
               </div>
               <div style={{ display: "flex", fontSize: blockTempSize, color: text, marginTop: 8 }}>{`${b.temp.high}°`}</div>
             </div>
@@ -299,10 +328,17 @@ function WeeklyTemplate({
       const blocks = analyzeTimeBlocks(hourly);
       const best = blocks.length > 0 ? blocks.reduce((a, b) => (b.score > a.score ? b : a)) : null;
       const score = best?.score ?? 50;
+      // Day-level danger: if any block flags lightning OR the day's
+      // own forecast text mentions it, the day is no-go regardless
+      // of best-block score.
+      const hasDangerBlock = blocks.some((b) => b.danger);
+      const periodDanger = detectDanger(`${p.shortForecast} ${p.detailedForecast ?? ""}`).level === "danger";
+      const danger = hasDangerBlock || periodDanger;
       return {
         period: p,
         score,
         grade: getGrade(score),
+        danger,
         date: new Date(p.startTime),
       };
     });
@@ -381,7 +417,7 @@ function WeeklyTemplate({
                   lineHeight: 1,
                 }}
               >
-                {d.grade.letter}
+                {d.danger ? <WarningTriangle size={dayGradeSize} /> : d.grade.letter}
               </div>
               <div style={{ display: "flex", fontSize: dayTempSize, color: text, marginTop: verticalDayStrip ? 0 : 6, marginLeft: verticalDayStrip ? 16 : 0 }}>{`${d.period.temperature}°`}</div>
             </div>
@@ -413,7 +449,7 @@ function WeeklyTemplate({
                 marginLeft: "auto",
               }}
             >
-              {bestDay.grade.letter}
+              {bestDay.danger ? <WarningTriangle size={bestDayGrade} /> : bestDay.grade.letter}
             </div>
           </div>
         )}
@@ -500,6 +536,7 @@ function HourlyTemplate({
             const label = hour === 0 ? "12am" : hour < 12 ? `${hour}am` : hour === 12 ? "12pm" : `${hour - 12}pm`;
             const precip = s.probabilityOfPrecipitation?.value ?? 0;
             const score = Math.max(0, 100 - precip);
+            const isDanger = detectDanger(s.shortForecast).level === "danger";
             return (
               <div
                 key={s.number}
@@ -526,7 +563,7 @@ function HourlyTemplate({
                     lineHeight: 1,
                   }}
                 >
-                  {getGrade(score).letter}
+                  {isDanger ? <WarningTriangle size={cellGradeSize} /> : getGrade(score).letter}
                 </div>
                 <div style={{ display: "flex", fontSize: cellTempSize, color: text, marginTop: isVertical ? 0 : 6 }}>{`${s.temperature}°`}</div>
               </div>
@@ -629,6 +666,7 @@ export async function GET(request: NextRequest) {
         blocks={blocks}
         bestBlock={best}
         headline={verdict.headline}
+        dangerLevel={verdict.danger}
         dateLabel={dateLabel}
         showWatermark={showWatermark}
       />
