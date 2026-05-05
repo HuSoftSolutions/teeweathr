@@ -6,7 +6,7 @@ import { CourseSearch } from "@/components/marketing/course-search";
 export const metadata: Metadata = {
   title: "TeeWeathr — Honest Golf Weather Forecasts",
   description:
-    "Find your golf course's real forecast. Hour-by-hour playability graded A through F — wind, rain, lightning, dew. National Weather Service data.",
+    "Find your golf course's real forecast. Hour-by-hour playability graded for wind, rain, lightning, and dew. National Weather Service data.",
 };
 
 // ─── Consumer Nav ────────────────────────────────────────────────
@@ -62,7 +62,7 @@ function SearchHero() {
           <span className="text-emerald-600">real golf forecast.</span>
         </h1>
         <p className="mt-6 text-base sm:text-lg text-zinc-600 max-w-xl mx-auto leading-relaxed">
-          Hour-by-hour playability — wind, rain, lightning, dew — graded A through F so you know whether to tee it up or stay home.
+          Hour-by-hour playability — wind, rain, lightning, dew — graded so you know whether to tee it up or stay home.
         </p>
         <div className="mt-10">
           <CourseSearch />

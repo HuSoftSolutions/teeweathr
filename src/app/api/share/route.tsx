@@ -9,6 +9,7 @@ import {
   getHourlyForDay,
   type TimeBlock,
 } from "@/lib/golf-scoring";
+import { WeatherIcon, pickWeatherIcon } from "@/components/weather-icon";
 import { logger } from "@/lib/logger";
 
 // Sizes (width × height in px). Match common social aspect ratios.
@@ -33,8 +34,8 @@ type Theme = "dark" | "light";
 
 // Color ramp for letter grades. Avoid red entirely — even on bad days the
 // imagery is for golfers, not emergency alerts. Anything below "fair"
-// drops into amber, and dangerous-weather blocks render a warning icon
-// (see WarningTriangle) instead of a letter.
+// drops into amber, and bad-weather cells render a specific weather
+// icon (see WeatherIcon) instead of a letter.
 const WARNING_AMBER = "#f59e0b";
 function gradeColor(score: number, accent: string): string {
   if (score >= 60) return accent;
@@ -42,25 +43,19 @@ function gradeColor(score: number, accent: string): string {
   return WARNING_AMBER;
 }
 
-// Lightning-risk indicator. Replaces the letter grade for any cell whose
-// forecast text triggers detectDanger() — the user-facing message is
-// "stay off the course", and the visual needs to match without screaming
-// red F at the viewer.
+// Decide whether to surface a specific weather icon (rain, lightning,
+// snow, fog, etc.) instead of the letter grade. The icon answers "why"
+// the cell is bad — a generic warning triangle was ambiguous.
 //
-// Built with two filled SVG paths instead of strokes because satori
-// renders stroke unreliably (especially at large sizes — the bounding
-// box flood-fills). Outer triangle is amber; the "!" is cut out via
-// fill-rule: evenodd against an inner amber rectangle + dot.
-function WarningTriangle({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <path
-        fill={WARNING_AMBER}
-        fillRule="evenodd"
-        d="M50 8 L94 88 L6 88 Z M46 35 L54 35 L54 62 L46 62 Z M46 70 L54 70 L54 78 L46 78 Z"
-      />
-    </svg>
-  );
+// Trigger: anything our scoring already flagged as danger, OR a poor
+// score (below D) where the forecast text names a recognizable weather
+// pattern. Plain bad weather without a named cause keeps the letter.
+function gradeOrIcon(score: number, forecast: string, danger: boolean, size: number) {
+  if (danger || score < 40) {
+    const iconType = pickWeatherIcon(forecast);
+    if (iconType) return <WeatherIcon type={iconType} size={size} color={WARNING_AMBER} />;
+  }
+  return null;
 }
 
 // Pull canonical config + weather server-side via the existing internal
@@ -244,7 +239,14 @@ function DailyTemplate({
               lineHeight: 1,
             }}
           >
-            {dangerLevel === "danger" ? <WarningTriangle size={s.gradeBig} /> : heroGrade}
+            {(() => {
+              // Pick the icon from the block that actually triggered danger
+              // so the visual matches the cause (lightning vs heavy rain etc.)
+              // — bestBlock is the *best* block by score and may not contain
+              // the storm-keyword phrase.
+              const heroForecast = blocks.find((b) => b.danger)?.forecast ?? bestBlock?.forecast ?? "";
+              return gradeOrIcon(heroScore, heroForecast, dangerLevel === "danger", s.gradeBig) ?? heroGrade;
+            })()}
           </div>
           <div style={{ display: "flex", flexDirection: "column", flex: 1, color: text }}>
             <div style={{ display: "flex", fontSize: headlineSize, fontWeight: 600, lineHeight: 1.15 }}>
@@ -286,7 +288,7 @@ function DailyTemplate({
                   lineHeight: 1,
                 }}
               >
-                {b.danger ? <WarningTriangle size={blockGradeSize} /> : b.grade.letter}
+                {gradeOrIcon(b.score, b.forecast, b.danger, blockGradeSize) ?? b.grade.letter}
               </div>
               <div style={{ display: "flex", fontSize: blockTempSize, color: text, marginTop: 8 }}>{`${b.temp.high}°`}</div>
             </div>
@@ -417,7 +419,7 @@ function WeeklyTemplate({
                   lineHeight: 1,
                 }}
               >
-                {d.danger ? <WarningTriangle size={dayGradeSize} /> : d.grade.letter}
+                {gradeOrIcon(d.score, d.period.shortForecast, d.danger, dayGradeSize) ?? d.grade.letter}
               </div>
               <div style={{ display: "flex", fontSize: dayTempSize, color: text, marginTop: verticalDayStrip ? 0 : 6, marginLeft: verticalDayStrip ? 16 : 0 }}>{`${d.period.temperature}°`}</div>
             </div>
@@ -449,7 +451,7 @@ function WeeklyTemplate({
                 marginLeft: "auto",
               }}
             >
-              {bestDay.danger ? <WarningTriangle size={bestDayGrade} /> : bestDay.grade.letter}
+              {gradeOrIcon(bestDay.score, bestDay.period.shortForecast, bestDay.danger, bestDayGrade) ?? bestDay.grade.letter}
             </div>
           </div>
         )}
@@ -563,7 +565,7 @@ function HourlyTemplate({
                     lineHeight: 1,
                   }}
                 >
-                  {isDanger ? <WarningTriangle size={cellGradeSize} /> : getGrade(score).letter}
+                  {gradeOrIcon(score, s.shortForecast, isDanger, cellGradeSize) ?? getGrade(score).letter}
                 </div>
                 <div style={{ display: "flex", fontSize: cellTempSize, color: text, marginTop: isVertical ? 0 : 6 }}>{`${s.temperature}°`}</div>
               </div>

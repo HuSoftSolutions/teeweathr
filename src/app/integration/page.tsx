@@ -11,7 +11,7 @@ import { DEMO_API_KEY } from "@/lib/demo";
 export const metadata: Metadata = {
   title: "TeeWeathr for Golf Courses — Embed Honest Weather on Your Site",
   description:
-    "Embed a golf-specific weather widget on your course's website. A–F playability grades by time of day, hourly forecasts, and severe-weather alerts.",
+    "Embed a golf-specific weather widget on your course's website. Letter-grade playability by time of day, hourly forecasts, and severe-weather alerts.",
 };
 
 // ─── Nav ─────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ function BusinessIntro() {
       </h1>
       <p className="mt-6 text-base sm:text-lg text-zinc-600 max-w-2xl mx-auto leading-relaxed">
         Generic forecasts say <span className="text-zinc-900 font-medium">&ldquo;70% rain all day&rdquo;</span> for a thirty-minute morning shower. Golfers cancel. Your tee sheet empties.
-        <span className="text-zinc-900 font-medium"> TeeWeathr</span> tells the truth — a golf-specific A–F grade so the rounds that should get played, get played.
+        <span className="text-zinc-900 font-medium"> TeeWeathr</span> tells the truth — a golf-specific playability grade so the rounds that should get played, get played.
       </p>
       <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
         <Link
