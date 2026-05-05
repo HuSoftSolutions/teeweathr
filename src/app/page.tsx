@@ -44,7 +44,7 @@ function Nav() {
 
 function SearchHero() {
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative">
       <div
         aria-hidden
         className="absolute inset-0 -z-10"
