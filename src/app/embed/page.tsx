@@ -232,6 +232,36 @@ function DayTabRow({ weather, dayPeriods, selectedDayIndex, onSelectDay, isDark,
   );
 }
 
+// ─── Compact block strip ────────────────────────────────────────
+// One-line summary of the four time-of-day blocks for the *selected* day.
+// Used in the compact view so smaller widgets still convey the per-chunk
+// breakdown that the medium/full views show as full rows.
+
+function CompactBlockStrip({ blocks, isDark }: { blocks: TimeBlock[]; isDark: boolean }) {
+  if (blocks.length === 0) return null;
+  return (
+    <div className={`flex rounded-md border overflow-hidden ${isDark ? "border-zinc-800 divide-zinc-800" : "border-zinc-200 divide-zinc-200"} divide-x`}>
+      {blocks.map((block) => (
+        <div
+          key={block.name}
+          className={`flex-1 flex flex-col items-center py-1 ${isDark ? "bg-zinc-900/40" : "bg-zinc-50"}`}
+          title={`${block.name} ${block.label} · ${block.grade.label}`}
+        >
+          <span className={`text-[8px] uppercase tracking-wider ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
+            {block.name.slice(0, 3)}
+          </span>
+          <span className="text-sm font-bold leading-none mt-0.5" style={gradeStyle(block.score)}>
+            {block.grade.letter}
+          </span>
+          <span className={`text-[9px] font-mono mt-0.5 ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
+            {block.temp.high}°
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Block row ──────────────────────────────────────────────────
 
 function BlockRow({ block, isDark, compact }: { block: TimeBlock; isDark: boolean; compact?: boolean }) {
@@ -545,16 +575,17 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                 <span className="text-2xl font-bold" style={gradeStyle(bestBlock?.score ?? verdict.dayScore)}>{getGrade(bestBlock?.score ?? verdict.dayScore).letter}</span>
                 <div className="flex-1 min-w-0">
                   <p className={`text-xs font-semibold truncate ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>{name}</p>
-                  <p className={`text-[10px] ${m}`}>{verdict.headline}</p>
+                  <p className={`text-[10px] ${m} truncate`}>{verdict.headline}</p>
                 </div>
               </div>
               {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="compact" />}
               <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
                 onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark} isCompact
                 todayStr={todayStr} tmrwStr={tmrwStr} />
-              {bestBlock && (
-                <p className={`text-[10px] ${m}`}>Best: {bestBlock.name} · {bestBlock.temp.high}°</p>
-              )}
+              {/* Per-chunk breakdown — same data the medium/full views show as
+                  full rows, condensed to one line so smaller widgets convey
+                  the same "why" without losing functionality. */}
+              <CompactBlockStrip blocks={blocks} isDark={isDark} />
               <p className={`text-[9px] ${m}`}>
                 Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
               </p>
@@ -569,17 +600,24 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
 
           {/* ─── Medium ─── */}
           {widgetSize === "medium" && (
-            <div className="flex flex-col h-full p-4 gap-3 overflow-y-auto">
-              <div className="flex items-center gap-2">
-                <Flag className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
-                <div className="min-w-0">
-                  <p className="text-sm font-bold truncate">{name}</p>
-                  <p className={`text-[10px] ${m}`}>{holes}h{par ? ` · Par ${par}` : ""}</p>
+            <div className="flex flex-col h-full">
+              {/* Pinned: course header + day tabs always visible. Day
+                  selection should never scroll out of view just because
+                  the user scrolled to read time-block details. */}
+              <div className={`shrink-0 px-4 pt-4 pb-3 flex flex-col gap-3 border-b ${brd}`}>
+                <div className="flex items-center gap-2">
+                  <Flag className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold truncate">{name}</p>
+                    <p className={`text-[10px] ${m}`}>{holes}h{par ? ` · Par ${par}` : ""}</p>
+                  </div>
                 </div>
+                <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
+                  onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
+                  todayStr={todayStr} tmrwStr={tmrwStr} />
               </div>
-              <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
-                onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
-                todayStr={todayStr} tmrwStr={tmrwStr} />
+              {/* Scrollable: alert + verdict + time blocks + footer */}
+              <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
               {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="medium" />}
               <div className="flex items-center gap-2">
                 {hasBlockingAlert ? <ShieldX className="h-4 w-4 text-red-400 shrink-0" /> :
@@ -602,67 +640,71 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                     onClick={trackReferral}>Powered by TeeWeathr</a>
                 </p>
               )}
+              </div>
             </div>
           )}
 
           {/* ─── Full ─── */}
           {widgetSize === "full" && (
-            <div className="flex flex-col h-full p-4 gap-4 overflow-y-auto">
-              <div className="flex items-center gap-2.5">
-                <Flag className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
-                <div className="min-w-0">
-                  <h1 className="text-base font-bold truncate">{name}</h1>
-                  <p className={`text-[11px] ${m}`}>{holes} holes{par ? ` · Par ${par}` : ""} · {weather.location}</p>
-                </div>
-              </div>
-              <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
-                onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
-                todayStr={todayStr} tmrwStr={tmrwStr} />
-              {/* Selected date */}
-              <p className={`text-xs ${m} -mt-2`}>
-                {new Date(selectedPeriod.startTime).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
-              </p>
-              {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="full" />}
-              {/* Verdict */}
-              <div className="flex items-center gap-3">
-                {hasBlockingAlert ? <ShieldX className="h-5 w-5 text-red-400 shrink-0" /> :
-                 verdict.status === "go" ? <CheckCircle2 className="h-5 w-5 shrink-0" style={statusStyle("go")} /> :
-                 verdict.status === "mixed" ? <AlertTriangle className="h-5 w-5 shrink-0" style={statusStyle("mixed")} /> :
-                 <ShieldX className="h-5 w-5 text-red-400 shrink-0" />}
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{verdict.headline}</p>
-                  <p className={`text-xs ${m} mt-0.5`}>{verdict.detail}</p>
-                </div>
-                {bestBlock && <span className="text-3xl font-bold" style={gradeStyle(bestBlock.score)}>{bestBlock.grade.letter}</span>}
-              </div>
-              {/* Blocks */}
-              <div className={`rounded-xl border ${brd} ${cardBg} divide-y ${divider}`}>
-                {blocks.map((block) => <BlockRow key={block.name} block={block} isDark={isDark} />)}
-                {blocks.length === 0 && (
-                  <div className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <WeatherIcon forecast={selectedPeriod.shortForecast} />
-                      <p className="text-sm">{selectedPeriod.shortForecast} · {selectedPeriod.temperature}°</p>
-                    </div>
-                    <p className={`text-xs ${m} mt-1`}>{selectedPeriod.detailedForecast}</p>
+            <div className="flex flex-col h-full">
+              {/* Pinned: course header + day tabs always visible. */}
+              <div className={`shrink-0 px-4 pt-4 pb-3 flex flex-col gap-3 border-b ${brd}`}>
+                <div className="flex items-center gap-2.5">
+                  <Flag className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
+                  <div className="min-w-0">
+                    <h1 className="text-base font-bold truncate">{name}</h1>
+                    <p className={`text-[11px] ${m}`}>{holes} holes{par ? ` · Par ${par}` : ""} · {weather.location}</p>
                   </div>
+                </div>
+                <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
+                  onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
+                  todayStr={todayStr} tmrwStr={tmrwStr} />
+              </div>
+              {/* Scrollable: selected day content */}
+              <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+                <p className={`text-xs ${m}`}>
+                  {new Date(selectedPeriod.startTime).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
+                </p>
+                {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="full" />}
+                <div className="flex items-center gap-3">
+                  {hasBlockingAlert ? <ShieldX className="h-5 w-5 text-red-400 shrink-0" /> :
+                   verdict.status === "go" ? <CheckCircle2 className="h-5 w-5 shrink-0" style={statusStyle("go")} /> :
+                   verdict.status === "mixed" ? <AlertTriangle className="h-5 w-5 shrink-0" style={statusStyle("mixed")} /> :
+                   <ShieldX className="h-5 w-5 text-red-400 shrink-0" />}
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{verdict.headline}</p>
+                    <p className={`text-xs ${m} mt-0.5`}>{verdict.detail}</p>
+                  </div>
+                  {bestBlock && <span className="text-3xl font-bold" style={gradeStyle(bestBlock.score)}>{bestBlock.grade.letter}</span>}
+                </div>
+                <div className={`rounded-xl border ${brd} ${cardBg} divide-y ${divider}`}>
+                  {blocks.map((block) => <BlockRow key={block.name} block={block} isDark={isDark} />)}
+                  {blocks.length === 0 && (
+                    <div className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <WeatherIcon forecast={selectedPeriod.shortForecast} />
+                        <p className="text-sm">{selectedPeriod.shortForecast} · {selectedPeriod.temperature}°</p>
+                      </div>
+                      <p className={`text-xs ${m} mt-1`}>{selectedPeriod.detailedForecast}</p>
+                    </div>
+                  )}
+                </div>
+                {bestBlock && bestBlock.score >= 30 && (
+                  <p className={`text-center text-xs ${m}`}>
+                    Best: <span className={isDark ? "text-zinc-300" : "text-zinc-700"}>{bestBlock.name}</span> ({bestBlock.label})
+                  </p>
+                )}
+                <p className={`text-center text-[11px] ${m}`}>
+                  Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                </p>
+                {showAds && <AdSlot isDark={isDark} />}
+                {showBranding && (
+                  <p className={`text-center text-[10px] mt-1 ${isDark ? "text-zinc-700" : "text-zinc-300"}`}>
+                    <a href="/" target="_blank" rel="noopener" className="hover:underline" style={{ color: "var(--accent)" }}
+                        onClick={trackReferral}>Powered by TeeWeathr</a>
+                  </p>
                 )}
               </div>
-              {bestBlock && bestBlock.score >= 30 && (
-                <p className={`text-center text-xs ${m}`}>
-                  Best: <span className={isDark ? "text-zinc-300" : "text-zinc-700"}>{bestBlock.name}</span> ({bestBlock.label})
-                </p>
-              )}
-              <p className={`text-center text-[11px] ${m}`}>
-                Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-              </p>
-              {showAds && <AdSlot isDark={isDark} />}
-              {showBranding && (
-                <p className={`text-center text-[10px] mt-1 ${isDark ? "text-zinc-700" : "text-zinc-300"}`}>
-                  <a href="/" target="_blank" rel="noopener" className="hover:underline" style={{ color: "var(--accent)" }}
-                      onClick={trackReferral}>Powered by TeeWeathr</a>
-                </p>
-              )}
             </div>
           )}
         </>
