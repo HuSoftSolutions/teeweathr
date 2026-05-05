@@ -54,9 +54,18 @@ function getTempImpact(temp: number): { score: number; impact: GolfFactor["impac
 function getRainImpact(precip: number | null, forecast?: string): { score: number; impact: GolfFactor["impact"]; detail: string } {
   const p = precip ?? 0;
 
+  const f = (forecast || "").toLowerCase();
+
+  // Lightning is a binary safety issue, not a probabilistic one. Even a
+  // "Slight Chance" of thunderstorms forces clearing the course, so the
+  // rain factor must score this near zero regardless of the precip%.
+  const hasStorm = f.includes("thunderstorm") || f.includes("lightning") || f.includes("severe");
+  if (hasStorm) {
+    return { score: 0, impact: "negative", detail: "Lightning risk — clear the course" };
+  }
+
   // NWS probability is area-wide and includes overnight carryover.
   // If the forecast TEXT says clear/sunny/cloudy, trust it over the probability.
-  const f = (forecast || "").toLowerCase();
   const isClearForecast = !f.includes("rain") && !f.includes("shower") &&
     !f.includes("drizzle") && !f.includes("storm") && !f.includes("precip");
 
@@ -88,7 +97,20 @@ export function calculateGolfConditions(period: WeatherPeriod): GolfConditions {
   const rain = getRainImpact(period.probabilityOfPrecipitation?.value, period.shortForecast);
   const humidity = getHumidityImpact(period.relativeHumidity?.value ?? 50);
 
-  const score = wind.score + temp.score + rain.score + humidity.score;
+  const raw = wind.score + temp.score + rain.score + humidity.score;
+
+  // Hard cap when the forecast itself names a danger or caution. Without
+  // this, a thunderstorm hour with mild temp + light wind still totals
+  // ~60 ("B") because rain is only one of four additive factors. The cap
+  // keeps block grades and the day verdict aligned: if the headline says
+  // "Stay off the course", the letter grade should agree.
+  const { level: dangerLevel } = detectDanger(period.shortForecast);
+  const score =
+    dangerLevel === "danger"
+      ? Math.min(raw, 20)
+      : dangerLevel === "caution"
+        ? Math.min(raw, 45)
+        : raw;
 
   let label: string;
   let color: string;
