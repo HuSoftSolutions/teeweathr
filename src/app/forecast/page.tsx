@@ -13,9 +13,11 @@ import {
   Wind, Thermometer, CloudRain, Sun, Cloud, CloudSun,
   MapPin, Search, Flag, CircleAlert, RefreshCw,
   Loader2, X, Heart, ChevronDown,
-  ShieldX, CheckCircle2, AlertTriangle,
+  CheckCircle2, AlertTriangle, CloudLightning, CloudSnow, CloudFog,
+  Snowflake,
 } from "lucide-react";
 import { AdSlot } from "@/components/ad-slot";
+import { pickWeatherIcon } from "@/components/weather-icon";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -34,10 +36,38 @@ function WeatherIcon({ forecast, className = "h-5 w-5" }: { forecast: string; cl
   return <Sun className={`${className} text-amber-300`} />;
 }
 
+// Verdict glyph for the no-go banner. Routes to a specific weather
+// icon when the forecast text names one (lightning vs heavy rain vs
+// snow), so the visual answers "why is this not a golf day?" instead
+// of using a generic red shield.
+function VerdictGlyph({ status, forecast, className = "h-5 w-5" }: {
+  status: "go" | "mixed" | "no-go";
+  forecast: string;
+  className?: string;
+}) {
+  if (status === "go") return <CheckCircle2 className={`${className} text-emerald-400 shrink-0`} />;
+  if (status === "mixed") return <AlertTriangle className={`${className} text-amber-400 shrink-0`} />;
+  const cls = `${className} text-amber-400 shrink-0`;
+  switch (pickWeatherIcon(forecast)) {
+    case "lightning":
+    case "severe": return <CloudLightning className={cls} />;
+    case "heavyRain":
+    case "rain": return <CloudRain className={cls} />;
+    case "snow":
+    case "hail": return <CloudSnow className={cls} />;
+    case "fog": return <CloudFog className={cls} />;
+    case "ice": return <Snowflake className={cls} />;
+    case "wind": return <Wind className={cls} />;
+    default: return <AlertTriangle className={cls} />;
+  }
+}
+
 function RainIndicator({ precip, label }: { precip: number; label: string }) {
-  // <40%: muted, barely visible. 40-59%: yellow. 60-79%: orange. 80%+: red washout.
+  // <40%: muted. 40-59%: yellow. 60-79%: orange. 80%+: bold amber.
+  // Red is reserved — for golfers, "rain expected" isn't an emergency,
+  // just unfortunate weather.
   if (precip >= 80) return (
-    <span className="flex items-center gap-0.5 text-red-400 font-medium">
+    <span className="flex items-center gap-0.5 text-amber-500 font-semibold">
       <CloudRain className="h-3 w-3" />{label}
     </span>
   );
@@ -51,7 +81,6 @@ function RainIndicator({ precip, label }: { precip: number; label: string }) {
       <CloudRain className="h-3 w-3" />{label}
     </span>
   );
-  // Under 40%: subtle
   return <span className="text-zinc-600 text-[11px]">{precip}% rain</span>;
 }
 
@@ -81,8 +110,8 @@ function BlockRow({ block }: { block: TimeBlock }) {
             <Wind className="h-3 w-3" />{block.wind.avg} mph
           </span>
           {block.danger ? (
-            <span className="flex items-center gap-0.5 text-red-400">
-              <ShieldX className="h-3 w-3" />{block.rain}
+            <span className="flex items-center gap-0.5 text-amber-500 font-medium">
+              <AlertTriangle className="h-3 w-3" />{block.rain}
             </span>
           ) : block.rain ? (
             <RainIndicator precip={block.precip.peak} label={block.rain} />
@@ -550,11 +579,10 @@ export default function Home() {
           })}
         </p>
 
-        {/* Verdict line */}
+        {/* Verdict line — glyph reflects the actual cause for no-go days
+            (rain vs lightning vs snow) so the visual matches the headline. */}
         <div className="flex items-center gap-3 mb-6">
-          {verdict.status === "go" ? <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /> :
-           verdict.status === "mixed" ? <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" /> :
-           <ShieldX className="h-5 w-5 text-red-400 shrink-0" />}
+          <VerdictGlyph status={verdict.status} forecast={selectedPeriod.shortForecast} />
           <div className="flex-1">
             <p className="text-sm font-medium text-zinc-200">{verdict.headline}</p>
             <p className="text-xs text-zinc-500 mt-0.5">{verdict.detail}</p>

@@ -99,18 +99,42 @@ export function calculateGolfConditions(period: WeatherPeriod): GolfConditions {
 
   const raw = wind.score + temp.score + rain.score + humidity.score;
 
-  // Hard cap when the forecast itself names a danger or caution. Without
-  // this, a thunderstorm hour with mild temp + light wind still totals
-  // ~60 ("B") because rain is only one of four additive factors. The cap
-  // keeps block grades and the day verdict aligned: if the headline says
-  // "Stay off the course", the letter grade should agree.
+  // Hard caps that keep per-hour scoring aligned with the day verdict.
+  // Without these the additive sum (wind + temp + rain + humidity) lets
+  // mild temp/wind/humidity carry a thunderstorm or rainy hour to a B+
+  // grade — even though `findPlayableWindows` would (correctly) reject
+  // the same hour as not-playable, leaving "Not a golf day" headlines
+  // sitting next to green letter grades.
+  //
+  // Three layered rules, applied in order from harshest to mildest:
+  //   1. Forecast text names a danger keyword (thunderstorm, lightning,
+  //      tornado, etc.) — lightning is binary, cap at 20 (D).
+  //   2. Forecast text confirms precipitation AND NWS precip% is high
+  //      enough that the verdict's playability rule (`precip < 50`)
+  //      would reject the hour. Cap below the playable threshold so
+  //      the score and the verdict agree.
+  //   3. Forecast text names a caution keyword (heavy rain, dense fog,
+  //      ice, etc.) — cap at 45 (C). Looser than the precip rule
+  //      because conditions like fog can be nasty without high precip%.
+  const f = period.shortForecast.toLowerCase();
+  const hasPrecipText = /rain|shower|drizzle|storm|snow|sleet/.test(f);
+  const precip = period.probabilityOfPrecipitation?.value ?? 0;
   const { level: dangerLevel } = detectDanger(period.shortForecast);
-  const score =
-    dangerLevel === "danger"
-      ? Math.min(raw, 20)
-      : dangerLevel === "caution"
-        ? Math.min(raw, 45)
-        : raw;
+
+  let score = raw;
+  if (dangerLevel === "danger") {
+    score = Math.min(score, 20);
+  } else if (hasPrecipText && precip >= 70) {
+    // Heavy expected rain — firmly D.
+    score = Math.min(score, 22);
+  } else if (hasPrecipText && precip >= 50) {
+    // Match the verdict's `precip < 50` playability cutoff. Anything
+    // above lands in D territory so block grades and the headline
+    // can't disagree.
+    score = Math.min(score, 28);
+  } else if (dangerLevel === "caution") {
+    score = Math.min(score, 45);
+  }
 
   let label: string;
   let color: string;
