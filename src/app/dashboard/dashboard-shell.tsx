@@ -3,7 +3,7 @@
 import { useRouter, usePathname } from "next/navigation";
 import type { SessionUser } from "@/lib/firebase/session";
 import {
-  LayoutDashboard, Flag, Code, BarChart3,
+  LayoutDashboard, Flag, Code, BarChart3, Share2,
   CreditCard, Settings, LogOut,
 } from "lucide-react";
 
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { label: "My Courses", href: "/dashboard/courses", icon: Flag },
   { label: "Embed", href: "/dashboard/embed", icon: Code },
+  { label: "Share", href: "/dashboard/share", icon: Share2 },
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { label: "Subscription", href: "/dashboard/subscription", icon: CreditCard },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
