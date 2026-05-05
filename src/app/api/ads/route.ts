@@ -37,9 +37,23 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
+  // Whitelist editable fields. Anything else (createdAt, etc.) stays
+  // immutable from the admin UI.
   const allowed: Record<string, unknown> = {};
   if (typeof updates.active === "boolean") allowed.active = updates.active;
   if (typeof updates.weight === "number") allowed.weight = Math.min(10, Math.max(1, updates.weight));
+  if (typeof updates.sponsor === "string") allowed.sponsor = updates.sponsor.trim();
+  if (typeof updates.text === "string") allowed.text = updates.text;
+  if (typeof updates.imageUrl === "string") allowed.imageUrl = updates.imageUrl;
+  if (typeof updates.clickUrl === "string") allowed.clickUrl = updates.clickUrl.trim();
+
+  if (allowed.sponsor === "" || allowed.clickUrl === "") {
+    return NextResponse.json({ error: "sponsor and clickUrl cannot be empty" }, { status: 400 });
+  }
+
+  if (Object.keys(allowed).length === 0) {
+    return NextResponse.json({ error: "no editable fields supplied" }, { status: 400 });
+  }
 
   await db.collection("adCreatives").doc(id).update(allowed);
   return NextResponse.json({ ok: true });
