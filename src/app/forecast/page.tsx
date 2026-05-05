@@ -15,6 +15,7 @@ import {
   Loader2, X, Heart, ChevronDown,
   ShieldX, CheckCircle2, AlertTriangle,
 } from "lucide-react";
+import { AdSlot } from "@/components/ad-slot";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -592,6 +593,12 @@ export default function Home() {
             <p className="text-xs text-zinc-500 mt-3 leading-relaxed">{selectedPeriod.detailedForecast}</p>
           </div>
         )}
+
+        {/* Sponsored — public consumer view always shows ads since it's
+            not behind a paid customer's domain. */}
+        <div className="mb-6">
+          <AdSlot isDark />
+        </div>
 
         {/* Recommendation */}
         {bestBlock && bestBlock.score >= 30 && (
