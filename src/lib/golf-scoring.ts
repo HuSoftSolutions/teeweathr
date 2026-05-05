@@ -148,8 +148,12 @@ export function getGrade(score: number): ScoreGrade {
   if (score >= 60) return { letter: "B", label: "Good" };
   if (score >= 50) return { letter: "C+", label: "Decent" };
   if (score >= 40) return { letter: "C", label: "Fair" };
-  if (score >= 30) return { letter: "D", label: "Marginal" };
-  return { letter: "F", label: "Skip it" };
+  // Floor at D — never surface "F". The lightning warning triangle
+  // already replaces the letter when there's an instruction to stay
+  // off the course; for plain bad weather (cold, very windy, heavy
+  // rain) we'd rather show "D – Skip it" than "F – Skip it" since
+  // golfers will read F as a hard stop and red flag.
+  return { letter: "D", label: score >= 30 ? "Marginal" : "Skip it" };
 }
 
 export function getScoreColor(score: number): string {
