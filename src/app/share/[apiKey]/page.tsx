@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 
 // Public OG-card landing page for a customer's forecast share URL.
 //
@@ -24,22 +25,43 @@ interface Props {
   searchParams: Promise<SearchParamsShape>;
 }
 
-function getBaseUrl(): string {
+// Resolve the canonical public origin for absolute URLs (og:image, og:url).
+// Order of preference:
+//   1. Inbound request host — matches whatever domain the scraper actually
+//      hit (teeweathr.com, custom domain, etc.).
+//   2. NEXT_PUBLIC_BASE_URL — explicit override.
+//   3. VERCEL_PROJECT_PRODUCTION_URL — Vercel's primary production domain
+//      (e.g. teeweathr.com), distinct from the per-deployment VERCEL_URL.
+//   4. VERCEL_URL — last resort. Note: per-deployment URLs are gated by
+//      Vercel deployment protection, so external scrapers can't fetch
+//      assets behind them. Avoid for OG.
+async function getBaseUrl(): Promise<string> {
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") || h.get("host");
+    const proto = h.get("x-forwarded-proto") || "https";
+    if (host) return `${proto}://${host}`;
+  } catch {
+    // Request headers unavailable during static rendering — fall through.
+  }
   if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://localhost:3000";
 }
 
-function buildImageUrl(apiKey: string, sp: SearchParamsShape): string {
-  const base = getBaseUrl();
-  const params = new URLSearchParams();
-  params.set("key", apiKey);
-  if (sp.format) params.set("format", sp.format);
-  if (sp.size) params.set("size", sp.size);
-  if (sp.date) params.set("date", sp.date);
-  if (sp.theme) params.set("theme", sp.theme);
-  if (sp.accent) params.set("accent", sp.accent);
-  return `${base}/api/share?${params.toString()}`;
+async function buildImageUrl(apiKey: string, sp: SearchParamsShape): Promise<string> {
+  const base = await getBaseUrl();
+  const qs = new URLSearchParams();
+  qs.set("key", apiKey);
+  if (sp.format) qs.set("format", sp.format);
+  if (sp.size) qs.set("size", sp.size);
+  if (sp.date) qs.set("date", sp.date);
+  if (sp.theme) qs.set("theme", sp.theme);
+  if (sp.accent) qs.set("accent", sp.accent);
+  return `${base}/api/share?${qs.toString()}`;
 }
 
 // Fetch course config for the title + CTA. Falls back gracefully on any
@@ -50,7 +72,7 @@ async function loadCourse(apiKey: string): Promise<{
   lon: number | null;
 }> {
   try {
-    const base = getBaseUrl();
+    const base = await getBaseUrl();
     const res = await fetch(`${base}/api/embed/${encodeURIComponent(apiKey)}`, {
       cache: "no-store",
     });
@@ -68,11 +90,24 @@ async function loadCourse(apiKey: string): Promise<{
   }
 }
 
+function buildPageUrl(base: string, apiKey: string, sp: SearchParamsShape): string {
+  const qs = new URLSearchParams();
+  if (sp.format) qs.set("format", sp.format);
+  if (sp.size) qs.set("size", sp.size);
+  if (sp.date) qs.set("date", sp.date);
+  if (sp.theme) qs.set("theme", sp.theme);
+  if (sp.accent) qs.set("accent", sp.accent);
+  const query = qs.toString();
+  return `${base}/share/${apiKey}${query ? `?${query}` : ""}`;
+}
+
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { apiKey } = await params;
   const sp = await searchParams;
   const { name } = await loadCourse(apiKey);
-  const imageUrl = buildImageUrl(apiKey, sp);
+  const base = await getBaseUrl();
+  const imageUrl = await buildImageUrl(apiKey, sp);
+  const pageUrl = buildPageUrl(base, apiKey, sp);
   const format = sp.format || "daily";
   const description =
     format === "weekly"
@@ -83,12 +118,15 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const title = `${name} — Golf Forecast`;
 
   return {
+    metadataBase: new URL(base),
     title,
     description,
+    alternates: { canonical: pageUrl },
     openGraph: {
       title,
       description,
       type: "website",
+      url: pageUrl,
       images: [{ url: imageUrl }],
     },
     twitter: {
@@ -104,7 +142,7 @@ export default async function SharePage({ params, searchParams }: Props) {
   const { apiKey } = await params;
   const sp = await searchParams;
   const { name, lat, lon } = await loadCourse(apiKey);
-  const imageUrl = buildImageUrl(apiKey, sp);
+  const imageUrl = await buildImageUrl(apiKey, sp);
 
   const forecastUrl =
     lat != null && lon != null
