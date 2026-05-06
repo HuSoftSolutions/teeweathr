@@ -85,7 +85,7 @@ function generatePreviewUrl(course: EmbedCourse, config: EmbedConfig, baseUrl: s
   return `${baseUrl}/embed?${params.toString()}`;
 }
 
-// CSS-safe id for an iframe embed of `course`. Used by the collapse-aware
+// CSS-safe id for an iframe embed of `course`. Used by the corner-popup
 // snippet so multiple TeeWeathr embeds on the same page don't collide.
 function snippetId(courseId: string): string {
   const safe = courseId.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -96,42 +96,28 @@ function generateCode(course: EmbedCourse, config: EmbedConfig, baseUrl: string,
   const url = generateProductionUrl(course, config, baseUrl, apiKey);
   const id = snippetId(course.id);
 
-  // Listener that resizes the iframe when the embedded widget posts a
-  // teeweathr:resize message. Without this the in-iframe collapse hides
-  // the widget content but the iframe keeps its declared height; with
-  // this, the iframe shrinks to a thin 44px bar and frees real space on
-  // the host page. Inline JS is small enough that platforms which strip
-  // <script> tags fall back gracefully — collapse still works visually.
-  const resizeListener = (fullHeight: string) => `<script>
-(function(){var f=document.getElementById('${id}');if(!f)return;var h='${fullHeight}';window.addEventListener('message',function(e){var d=e.data;if(!d||d.source!=='teeweathr'||d.type!=='resize')return;f.style.transition='height 220ms ease';f.style.height=d.collapsed?'44px':h;});})();
-</script>`;
-
   switch (config.format) {
     case "full":
       return `<!-- TeeWeathr - ${course.name} -->
 <iframe
-  id="${id}"
   src="${url}"
   width="${config.width}"
   height="${config.height}"
   style="border: none; border-radius: ${config.borderRadius}; overflow: hidden;"
   loading="lazy"
   title="TeeWeathr - ${course.name}"
-></iframe>
-${resizeListener(config.height)}`;
+></iframe>`;
 
     case "card":
       return `<!-- TeeWeathr - ${course.name} -->
 <iframe
-  id="${id}"
   src="${url}"
   width="${config.width}"
   height="${config.height}"
   style="border: none; border-radius: ${config.borderRadius}; box-shadow: 0 4px 24px rgba(0,0,0,0.15);"
   loading="lazy"
   title="TeeWeathr - ${course.name}"
-></iframe>
-${resizeListener(config.height)}`;
+></iframe>`;
 
     case "corner": {
       // Closed state is a TeeWeathr-branded pill iframe (loads ?view=pill)
