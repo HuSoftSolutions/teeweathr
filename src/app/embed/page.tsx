@@ -12,6 +12,7 @@ import {
   Wind, CloudRain, Sun, Cloud, CloudSun, Flag,
   CheckCircle2, AlertTriangle, Loader2,
   CloudLightning, CloudSnow, CloudFog, Snowflake,
+  ChevronUp, ChevronDown,
 } from "lucide-react";
 import { AdSlot } from "@/components/ad-slot";
 import { pickWeatherIcon } from "@/components/weather-icon";
@@ -150,6 +151,100 @@ function statusStyle(status: string): React.CSSProperties {
   if (status === "go") return { color: "var(--accent)" };
   if (status === "mixed") return { color: "#fbbf24" };
   return { color: "#f59e0b" };
+}
+
+// ─── Collapsed view ─────────────────────────────────────────────
+//
+// End-user collapse — an iframe widget on a third-party page should never
+// be a permanent fixture. The button hides the body of the widget and
+// leaves only a thin "Show forecast" bar so the visitor can reclaim
+// vertical space without losing access to the forecast.
+//
+// State persists in localStorage (scoped to the iframe origin, keyed by
+// apiKey+courseId) so a user who collapses on one visit stays collapsed
+// on the next. The widget also posts a `teeweathr:resize` message to its
+// parent in case the embedding page wants to resize the iframe — listening
+// is optional. Without a listener the collapse is purely visual; with a
+// listener (a few lines of JS in the embed snippet) the iframe height
+// shrinks to ~44px and frees real page space.
+function useCollapsed(storageKey: string) {
+  const [collapsed, setCollapsedState] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !storageKey) return;
+    try {
+      setCollapsedState(window.localStorage.getItem(storageKey) === "1");
+    } catch {
+      // localStorage may be blocked in 3p iframes (Safari ITP, etc.) —
+      // collapse remains in-memory only.
+    }
+  }, [storageKey]);
+
+  const setCollapsed = useCallback(
+    (next: boolean) => {
+      setCollapsedState(next);
+      if (typeof window === "undefined") return;
+      if (storageKey) {
+        try {
+          if (next) window.localStorage.setItem(storageKey, "1");
+          else window.localStorage.removeItem(storageKey);
+        } catch {
+          // ignore — see comment above
+        }
+      }
+      try {
+        window.parent?.postMessage(
+          { source: "teeweathr", type: "resize", collapsed: next },
+          "*",
+        );
+      } catch {
+        // parent unreachable / cross-origin — no-op
+      }
+    },
+    [storageKey],
+  );
+
+  return [collapsed, setCollapsed] as const;
+}
+
+function CollapsedBar({ name, score, isDark, onExpand }: {
+  name: string;
+  score: number;
+  isDark: boolean;
+  onExpand: () => void;
+}) {
+  const grade = getGrade(score);
+  return (
+    <button
+      onClick={onExpand}
+      className={`flex items-center gap-2 w-full h-full px-3 transition-colors ${
+        isDark ? "hover:bg-zinc-900" : "hover:bg-zinc-50"
+      }`}
+      title="Show forecast"
+    >
+      <Flag className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+      <span className={`text-xs font-medium truncate flex-1 text-left ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
+        {name}
+      </span>
+      <span className="text-sm font-bold shrink-0" style={gradeStyle(score)}>{grade.letter}</span>
+      <ChevronDown className={`h-3.5 w-3.5 shrink-0 ${isDark ? "text-zinc-500" : "text-zinc-400"}`} />
+    </button>
+  );
+}
+
+function CollapseButton({ isDark, onClick }: { isDark: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 rounded-full p-1 transition-colors ${
+        isDark ? "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300" : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+      }`}
+      title="Hide forecast"
+      aria-label="Hide forecast"
+    >
+      <ChevronUp className="h-3.5 w-3.5" />
+    </button>
+  );
 }
 
 // ─── Shared day tab logic ───────────────────────────────────────
@@ -480,6 +575,12 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   const cardBg = isDark ? "bg-zinc-900/50" : "bg-zinc-50";
   const divider = isDark ? "divide-zinc-800/60" : "divide-zinc-200";
 
+  // Collapse persists per (apiKey, course) so a visitor who's hidden the
+  // widget on one course's page doesn't see it pop back open on the next.
+  const [collapsed, setCollapsed] = useCollapsed(
+    apiKey ? `tw-collapsed:${apiKey}:${resolvedCourseId}` : `tw-collapsed:raw:${lat},${lon}`,
+  );
+
   return (
     <div ref={containerRef} className={`h-screen w-screen overflow-hidden ${bg} ${text}`}
       style={{ "--accent": accentHex } as React.CSSProperties}>
@@ -502,7 +603,19 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
         </div>
       )}
 
-      {!loading && weather && selectedPeriod && verdict && (
+      {/* Collapsed view — intercepts compact/medium/full and renders a thin
+          bar with course name + grade + an expand button. Skipped for
+          micro since that view is already minimal. */}
+      {!loading && weather && selectedPeriod && verdict && collapsed && widgetSize !== "micro" && (
+        <CollapsedBar
+          name={name}
+          score={bestBlock?.score ?? verdict.dayScore}
+          isDark={isDark}
+          onExpand={() => setCollapsed(false)}
+        />
+      )}
+
+      {!loading && weather && selectedPeriod && verdict && !(collapsed && widgetSize !== "micro") && (
         <>
           {/* ─── Micro ─── */}
           {widgetSize === "micro" && (
@@ -537,6 +650,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                   <p className={`text-xs font-semibold truncate ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>{name}</p>
                   <p className={`text-[10px] ${m} truncate`}>{verdict.headline}</p>
                 </div>
+                <CollapseButton isDark={isDark} onClick={() => setCollapsed(true)} />
               </div>
               {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="compact" />}
               <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
@@ -567,10 +681,11 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               <div className={`shrink-0 px-4 pt-4 pb-3 flex flex-col gap-3 border-b ${brd}`}>
                 <div className="flex items-center gap-2">
                   <Flag className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold truncate">{name}</p>
                     <p className={`text-[10px] ${m}`}>{holes}h{par ? ` · Par ${par}` : ""}</p>
                   </div>
+                  <CollapseButton isDark={isDark} onClick={() => setCollapsed(true)} />
                 </div>
                 <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
                   onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
@@ -613,10 +728,11 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               <div className={`shrink-0 px-4 pt-4 pb-3 flex flex-col gap-3 border-b ${brd}`}>
                 <div className="flex items-center gap-2.5">
                   <Flag className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h1 className="text-base font-bold truncate">{name}</h1>
                     <p className={`text-[11px] ${m}`}>{holes} holes{par ? ` · Par ${par}` : ""} · {weather.location}</p>
                   </div>
+                  <CollapseButton isDark={isDark} onClick={() => setCollapsed(true)} />
                 </div>
                 <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
                   onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
