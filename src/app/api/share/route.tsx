@@ -4,6 +4,7 @@ import type { DangerLevel, WeatherData, WeatherPeriod } from "@/lib/types";
 import {
   analyzeDayVerdict,
   analyzeTimeBlocks,
+  calculateGolfConditions,
   detectDanger,
   getGrade,
   getHourlyForDay,
@@ -485,27 +486,31 @@ function HourlyTemplate({
   const text = isDark ? "#f4f4f5" : "#18181b";
   const muted = isDark ? "#71717a" : "#71717a";
 
-  // Pick the slot count + step based on canvas size — story has tons of
-  // vertical room so we show a denser hour list, landscape is short so
-  // we cap to a single horizontal row.
-  const stepHours = size === "story" ? 1 : 2;
-  const maxSlots = size === "landscape" ? 8 : size === "story" ? 14 : 8;
+  // Always 8 slots, every 2 hours, 6 AM through 8 PM. Story used to
+  // render 14 rows but the canvas couldn't fit them — each cell had
+  // ~107px of vertical room while the grade fontSize alone was 84px,
+  // so content collapsed into illegible stripes. 8 slots gives every
+  // cell room to breathe at every aspect ratio.
   const slots = hourly
     .filter((p) => {
       const hr = new Date(p.startTime).getHours();
-      return hr >= 6 && hr <= 21 && hr % stepHours === 0;
+      return hr >= 6 && hr <= 20 && hr % 2 === 0;
     })
-    .slice(0, maxSlots);
+    .slice(0, 8);
 
   const sc = scale(size);
-
-  // Layout: story = vertical list of rows; landscape = single horizontal
-  // row; square = horizontal strip with bigger cells (8 across with
-  // explicit basis to avoid satori flex-wrap quirks).
   const isVertical = size === "story";
-  const cellGradeSize = size === "story" ? 84 : size === "landscape" ? 44 : 64;
-  const cellLabelSize = size === "story" ? 28 : size === "landscape" ? 16 : 22;
-  const cellTempSize = size === "story" ? 28 : size === "landscape" ? 16 : 22;
+  const cardBg = isDark ? "#18181b" : "#f4f4f5";
+
+  // Per-canvas sizing tuned so cells are legible at thumbnail scale and
+  // at native resolution. Story keeps tall fixed-height cells with a
+  // horizontal content row; square/landscape keep the vertical stack
+  // inside each cell.
+  const storyCellHeight = 170;
+  const cellHourFont = size === "story" ? 38 : size === "landscape" ? 20 : 26;
+  const cellGradeFont = size === "story" ? 100 : size === "landscape" ? 52 : 72;
+  const cellTempFont = size === "story" ? 42 : size === "landscape" ? 22 : 28;
+  const cellPadding = size === "story" ? 36 : size === "landscape" ? 14 : 18;
 
   return (
     <Frame width={w} height={h} bg={bg} size={size}>
@@ -530,44 +535,120 @@ function HourlyTemplate({
           style={{
             display: "flex",
             flexDirection: isVertical ? "column" : "row",
-            gap: isVertical ? 10 : 12,
+            gap: 12,
           }}
         >
           {slots.map((s) => {
             const hour = new Date(s.startTime).getHours();
-            const label = hour === 0 ? "12am" : hour < 12 ? `${hour}am` : hour === 12 ? "12pm" : `${hour - 12}pm`;
-            const precip = s.probabilityOfPrecipitation?.value ?? 0;
-            const score = Math.max(0, 100 - precip);
+            const label = hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`;
+            // Use the real golf score so per-hour grades reflect the
+            // same caps the verdict uses (rain ≥ 50 → D, lightning → D,
+            // etc.) instead of just `100 - precip`.
+            const score = calculateGolfConditions(s).score;
             const isDanger = detectDanger(s.shortForecast).level === "danger";
+            const iconEl = gradeOrIcon(score, s.shortForecast, isDanger, cellGradeFont);
+            const letter = getGrade(score).letter;
+
+            if (isVertical) {
+              // Story cell: tall horizontal row, hour | grade | temp.
+              return (
+                <div
+                  key={s.number}
+                  style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    background: cardBg,
+                    borderRadius: 24,
+                    height: storyCellHeight,
+                    paddingLeft: cellPadding,
+                    paddingRight: cellPadding,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: cellHourFont,
+                      color: muted,
+                      fontWeight: 600,
+                      width: 150,
+                    }}
+                  >
+                    {label}
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: cellGradeFont,
+                      fontWeight: 800,
+                      color: gradeColor(score, accent),
+                      lineHeight: 1,
+                    }}
+                  >
+                    {iconEl ?? letter}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: cellTempFont,
+                      color: text,
+                      fontWeight: 600,
+                      width: 130,
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    {`${s.temperature}°`}
+                  </div>
+                </div>
+              );
+            }
+
+            // Square / landscape cell: vertical stack inside each cell.
             return (
               <div
                 key={s.number}
                 style={{
                   flex: 1,
                   display: "flex",
-                  flexDirection: isVertical ? "row" : "column",
+                  flexDirection: "column",
                   alignItems: "center",
-                  justifyContent: isVertical ? "space-between" : "center",
-                  background: isDark ? "#18181b" : "#f4f4f5",
+                  justifyContent: "center",
+                  background: cardBg,
                   borderRadius: 16,
-                  padding: isVertical ? 20 : 16,
-                  gap: isVertical ? 24 : 0,
+                  padding: cellPadding,
                 }}
               >
-                <div style={{ display: "flex", fontSize: cellLabelSize, color: muted, textTransform: "uppercase", flex: isVertical ? "0 0 auto" : "0 0 auto", minWidth: isVertical ? 100 : 0 }}>{label}</div>
                 <div
                   style={{
                     display: "flex",
-                    fontSize: cellGradeSize,
+                    fontSize: cellHourFont,
+                    color: muted,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {label}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    fontSize: cellGradeFont,
                     fontWeight: 800,
                     color: gradeColor(score, accent),
-                    marginTop: isVertical ? 0 : 6,
+                    marginTop: 8,
                     lineHeight: 1,
                   }}
                 >
-                  {gradeOrIcon(score, s.shortForecast, isDanger, cellGradeSize) ?? getGrade(score).letter}
+                  {iconEl ?? letter}
                 </div>
-                <div style={{ display: "flex", fontSize: cellTempSize, color: text, marginTop: isVertical ? 0 : 6 }}>{`${s.temperature}°`}</div>
+                <div style={{ display: "flex", fontSize: cellTempFont, color: text, marginTop: 8 }}>
+                  {`${s.temperature}°`}
+                </div>
               </div>
             );
           })}
