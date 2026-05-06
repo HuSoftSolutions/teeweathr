@@ -542,15 +542,24 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
     <div ref={containerRef} className={`h-screen w-screen overflow-hidden ${bg} ${text}`}
       style={{ "--accent": accentHex } as React.CSSProperties}>
 
-      {(!lat || !lon) && (
-        <div className="flex items-center justify-center h-full p-3">
-          <p className={`text-xs ${m} text-center`}>Add ?lat=XX&lon=YY&name=Course+Name</p>
+      {/* Loader covers the entire async window: keyed embeds wait on
+          /api/embed/[key] before lat/lon are known, then on the weather
+          fetch. Showing the loader for the whole window prevents the
+          old behaviour where the "Add ?lat=…" instructional message
+          flashed under the spinner during config load. */}
+      {(configLoading || (loading && (apiKey || (lat && lon)))) && (
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className={`h-4 w-4 animate-spin ${m}`} />
         </div>
       )}
 
-      {(configLoading || (loading && lat && lon)) && (
-        <div className="flex items-center justify-center h-full">
-          <Loader2 className={`h-4 w-4 animate-spin ${m}`} />
+      {/* Setup hint — only for raw (keyless) embeds where the
+          developer literally hasn't filled in the URL yet. Keyed
+          embeds get their coords from server config and should
+          never see this message. */}
+      {!apiKey && !configLoading && (!lat || !lon) && (
+        <div className="flex items-center justify-center h-full p-3">
+          <p className={`text-xs ${m} text-center`}>Add ?lat=XX&lon=YY&name=Course+Name</p>
         </div>
       )}
 
