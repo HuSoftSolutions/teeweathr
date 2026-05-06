@@ -113,13 +113,20 @@ export default function SharePage() {
   }
 
   // Date picker options: today + next 6 days. Cap at the NWS forecast window.
+  // Build the YYYY-MM-DD value from local components — toISOString()
+  // returns the UTC date, which in negative-offset timezones (EST after
+  // ~7 PM) is already the *next* day, so a button labeled "Wed, May 6"
+  // would send "2026-05-07" to the server.
   const dateOptions = useMemo(() => {
     const opts: { value: string; label: string }[] = [{ value: "", label: "Today" }];
     for (let i = 1; i < 7; i++) {
       const d = new Date();
       d.setDate(d.getDate() + i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
       opts.push({
-        value: d.toISOString().slice(0, 10),
+        value: `${yyyy}-${mm}-${dd}`,
         label: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
       });
     }

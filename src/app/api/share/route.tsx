@@ -90,10 +90,16 @@ async function fetchCourseAndWeather(req: NextRequest, apiKey: string) {
 
 // Pick the WeatherPeriod for a target date string (YYYY-MM-DD), or default
 // to today (the first daytime period in the response).
+//
+// Parse the YYYY-MM-DD as local components rather than `new Date(dateStr)`,
+// which interprets a bare ISO date as UTC midnight and then shifts the
+// day backwards in negative-offset server timezones (e.g. dev on EST).
 function pickDayPeriod(weather: WeatherData, dateStr: string | null): WeatherPeriod {
   const dayPeriods = weather.periods.filter((p) => p.isDaytime);
   if (!dateStr) return dayPeriods[0] ?? weather.periods[0];
-  const target = new Date(dateStr).toDateString();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!m) return dayPeriods[0] ?? weather.periods[0];
+  const target = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toDateString();
   return (
     dayPeriods.find((p) => new Date(p.startTime).toDateString() === target) ??
     dayPeriods[0] ??
