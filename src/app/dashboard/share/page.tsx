@@ -8,9 +8,9 @@ type ShareSize = "square" | "landscape" | "story";
 type Theme = "dark" | "light";
 
 const FORMATS: { id: ShareFormat; label: string; desc: string }[] = [
-  { id: "daily", label: "Daily", desc: "Today's grade + time-block breakdown" },
-  { id: "weekly", label: "Weekly", desc: "7-day overview with best-day callout" },
-  { id: "hourly", label: "Hourly", desc: "Hour-by-hour grades through the day" },
+  { id: "daily", label: "Daily", desc: "Today + time blocks" },
+  { id: "weekly", label: "Weekly", desc: "7-day overview" },
+  { id: "hourly", label: "Hourly", desc: "Hour-by-hour grades" },
 ];
 
 const SIZES: { id: ShareSize; label: string; ratio: string; useFor: string }[] = [
@@ -154,9 +154,13 @@ export default function SharePage() {
   const previewAspect =
     size === "square" ? "1 / 1" : size === "landscape" ? "1200 / 630" : "9 / 16";
   // Story is tall — keep the preview narrower so it doesn't dominate the
-  // viewport. Square + landscape get a wider preview slot.
+  // viewport. Square + landscape get a wider preview slot. Below xl,
+  // the layout stacks and the preview centers above the controls; cap
+  // the max-width so a stacked story preview doesn't go full bleed.
   const previewWidthClass =
-    size === "story" ? "lg:w-[260px]" : "lg:w-[400px]";
+    size === "story"
+      ? "w-full max-w-[260px] xl:w-[260px]"
+      : "w-full max-w-[400px] xl:w-[400px]";
 
   const isFree = biz.tier === "free";
 
@@ -170,7 +174,7 @@ export default function SharePage() {
         Generate a forecast image, download it, and post to wherever your golfers hang out.
       </p>
 
-      <div className="flex flex-col lg:flex-row gap-8">
+      <div className="flex flex-col xl:flex-row gap-8">
         {/* ─── Controls ─── */}
         <div className="flex-1 min-w-0 space-y-6">
           {/* Format */}
@@ -348,7 +352,7 @@ export default function SharePage() {
         </div>
 
         {/* ─── Preview ─── */}
-        <div className={`${previewWidthClass} shrink-0 lg:sticky lg:top-8 lg:self-start`}>
+        <div className={`${previewWidthClass} shrink-0 mx-auto xl:mx-0 xl:sticky xl:top-8 xl:self-start`}>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Preview</h2>
           <div
             className="relative rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden w-full"
