@@ -131,14 +131,20 @@ function generateCode(course: EmbedCourse, config: EmbedConfig, baseUrl: string,
       const shadowDark = config.theme === "dark"
         ? "0 8px 28px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.08)"
         : "0 8px 28px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.06)";
+      // Popup iframe is responsive: max-width caps it to the viewport
+      // minus the 20px corner margin on each side, so it never overflows
+      // past the screen edge on narrow viewports (mobile, Wix mobile
+      // breakpoint, etc.). Same idea for height on short viewports.
+      // The popup wrapper also caps its width so the × button stays
+      // anchored to the iframe's right edge after the iframe shrinks.
       return `<!-- TeeWeathr Corner Widget - ${course.name} -->
-<div id="${id}" style="position:fixed;${sideKey}:20px;bottom:20px;z-index:9999;">
-  <div id="${popupId}" style="display:none;position:relative;margin-bottom:12px;">
+<div id="${id}" style="position:fixed;${sideKey}:20px;bottom:20px;z-index:9999;max-width:calc(100vw - 40px);">
+  <div id="${popupId}" style="display:none;position:relative;margin-bottom:12px;width:${config.width};max-width:calc(100vw - 40px);">
     <iframe
       src="${url}"
       width="${config.width}"
       height="${config.height}"
-      style="border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.3);display:block;"
+      style="border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.3);display:block;width:100%;height:${config.height};max-height:calc(100vh - 100px);"
       loading="lazy"
       title="TeeWeathr - ${course.name}"
     ></iframe>
