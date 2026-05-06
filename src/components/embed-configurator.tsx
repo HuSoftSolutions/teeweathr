@@ -133,26 +133,46 @@ ${resizeListener(config.height)}`;
 ></iframe>
 ${resizeListener(config.height)}`;
 
-    case "corner":
+    case "corner": {
+      // Closed state is a TeeWeathr-branded pill iframe (loads ?view=pill)
+      // showing today's grade. Click anywhere on the wrapper opens the
+      // full popup. The iframe inside the trigger uses pointer-events:none
+      // so clicks fall through to the wrapper's onclick.
+      const pillUrl = url + (url.includes("?") ? "&" : "?") + "view=pill";
+      const popupId = `${id}-popup`;
+      const triggerId = `${id}-trigger`;
+      const sideKey = config.position === "bottom-right" ? "right" : "left";
+      const shadowDark = config.theme === "dark"
+        ? "0 8px 28px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.08)"
+        : "0 8px 28px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.06)";
       return `<!-- TeeWeathr Corner Widget - ${course.name} -->
-<div id="teeweathr-widget" style="position:fixed;${config.position === "bottom-right" ? "right" : "left"}:20px;bottom:20px;z-index:9999;">
-  <div id="teeweathr-popup" style="display:none;margin-bottom:12px;">
+<div id="${id}" style="position:fixed;${sideKey}:20px;bottom:20px;z-index:9999;">
+  <div id="${popupId}" style="display:none;position:relative;margin-bottom:12px;">
     <iframe
       src="${url}"
       width="${config.width}"
       height="${config.height}"
-      style="border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.3);"
+      style="border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.3);display:block;"
       loading="lazy"
       title="TeeWeathr - ${course.name}"
     ></iframe>
-    <button onclick="document.getElementById('teeweathr-popup').style.display='none'"
-      style="position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.5);color:white;border:none;cursor:pointer;font-size:16px;">×</button>
+    <button onclick="document.getElementById('${popupId}').style.display='none'"
+      style="position:absolute;top:8px;${sideKey}:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.5);color:white;border:none;cursor:pointer;font-size:16px;">×</button>
   </div>
-  <button onclick="var p=document.getElementById('teeweathr-popup');p.style.display=p.style.display==='none'?'block':'none';"
-    style="width:56px;height:56px;border-radius:50%;background:${ACCENTS.find(a => a.id === config.accent)?.color || "#10b981"};border:none;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-2"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="9" r="1"/></svg>
-  </button>
+  <div id="${triggerId}"
+    onclick="var p=document.getElementById('${popupId}');p.style.display=p.style.display==='none'?'block':'none';"
+    style="cursor:pointer;width:160px;height:44px;border-radius:22px;overflow:hidden;box-shadow:${shadowDark};">
+    <iframe
+      src="${pillUrl}"
+      width="160"
+      height="44"
+      style="border:none;display:block;pointer-events:none;"
+      loading="lazy"
+      title="TeeWeathr forecast"
+    ></iframe>
+  </div>
 </div>`;
+    }
 
     case "banner":
       return `<!-- TeeWeathr Banner - ${course.name} -->

@@ -342,6 +342,60 @@ function BlockRow({ block, isDark, compact }: { block: TimeBlock; isDark: boolea
   );
 }
 
+// ─── Pill View (corner-popup trigger) ──────────────────────────
+//
+// Compact rounded badge used as the closed state of a corner-popup
+// embed. Loaded inside its own tiny iframe (`?view=pill`) by the
+// snippet — clicks fall through to the host page wrapper which
+// toggles the main popup iframe.
+
+function PillView({ score, isDark, forecast, danger }: {
+  score: number;
+  isDark: boolean;
+  forecast: string;
+  danger: boolean;
+}) {
+  const grade = getGrade(score);
+  // Surface the rain/lightning icon when conditions are poor — same
+  // logic the rest of the app uses, so a stormy day shows the cloud
+  // glyph instead of an ambiguous "D" letter.
+  const iconType = danger || score < 40 ? pickWeatherIcon(forecast) : null;
+  const ratingNode = iconType
+    ? (() => {
+        const cls = "h-5 w-5 text-amber-500";
+        switch (iconType) {
+          case "lightning":
+          case "severe": return <CloudLightning className={cls} />;
+          case "heavyRain":
+          case "rain": return <CloudRain className={cls} />;
+          case "snow":
+          case "hail": return <CloudSnow className={cls} />;
+          case "fog": return <CloudFog className={cls} />;
+          case "ice": return <Snowflake className={cls} />;
+          case "wind": return <Wind className={cls} />;
+        }
+      })()
+    : (
+      <span className="text-lg font-bold leading-none" style={gradeStyle(score)}>
+        {grade.letter}
+      </span>
+    );
+  return (
+    <div
+      className={`flex items-center gap-2 h-full w-full px-3 ${
+        isDark ? "bg-zinc-900" : "bg-white"
+      }`}
+    >
+      <Flag className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
+      <span className={`text-[10px] font-semibold uppercase tracking-wider shrink-0 ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
+        TeeWeathr
+      </span>
+      <div className="flex-1" />
+      {ratingNode}
+    </div>
+  );
+}
+
 // ─── Micro View (banner + inline badge) ─────────────────────────
 
 function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds, todayStr, tmrwStr, alert }: {
@@ -464,6 +518,10 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   // Server-enforced: if API key is present, ONLY the server decides these
   const showBranding = apiKey ? (serverConfig?.showBranding ?? true) : params.branding !== "false";
   const showAds = apiKey ? (serverConfig?.showAds ?? false) : params.ads === "true";
+  // Forced view override — corner-popup embed snippet uses ?view=pill so
+  // its closed-state pill always renders the compact badge regardless of
+  // detected iframe size.
+  const forcedView = params.view;
   const resolvedCourseId = serverConfig?.courseId || courseParam || "unknown";
 
   // Analytics — events queue in memory and flush as a batch (debounced or
@@ -605,8 +663,8 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
 
       {/* Collapsed view — intercepts compact/medium/full and renders a thin
           bar with course name + grade + an expand button. Skipped for
-          micro since that view is already minimal. */}
-      {!loading && weather && selectedPeriod && verdict && collapsed && widgetSize !== "micro" && (
+          micro and pill since those views are already minimal. */}
+      {!loading && weather && selectedPeriod && verdict && forcedView !== "pill" && collapsed && widgetSize !== "micro" && (
         <CollapsedBar
           name={name}
           score={bestBlock?.score ?? verdict.dayScore}
@@ -615,7 +673,17 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
         />
       )}
 
-      {!loading && weather && selectedPeriod && verdict && !(collapsed && widgetSize !== "micro") && (
+      {/* ─── Pill view (corner-popup trigger) ─── */}
+      {!loading && weather && selectedPeriod && verdict && forcedView === "pill" && (
+        <PillView
+          score={bestBlock?.score ?? verdict.dayScore}
+          isDark={isDark}
+          forecast={selectedPeriod.shortForecast}
+          danger={bestBlock?.danger ?? false}
+        />
+      )}
+
+      {!loading && weather && selectedPeriod && verdict && forcedView !== "pill" && !(collapsed && widgetSize !== "micro") && (
         <>
           {/* ─── Micro ─── */}
           {widgetSize === "micro" && (
