@@ -349,17 +349,24 @@ function WeeklyTemplate({
   const bestDay = days.length > 0 ? days.reduce((a, b) => (b.score > a.score ? b : a)) : null;
   const s = scale(size);
 
-  // Story stacks the 7 days vertically (rows) so each day gets full width
-  // and the canvas's tall aspect is filled. Square + landscape lay them out
-  // as a horizontal strip.
-  const verticalDayStrip = size === "story";
-  const dayGradeSize = size === "story" ? 96 : size === "landscape" ? 44 : 56;
-  const dayLabelSize = size === "story" ? 28 : size === "landscape" ? 16 : 20;
-  const dayDateSize = size === "story" ? 22 : size === "landscape" ? 14 : 18;
-  const dayTempSize = size === "story" ? 30 : size === "landscape" ? 18 : 22;
+  // Story stacks the 7 days vertically (rows) with FIXED heights so the
+  // grade letter (~90px) actually fits in each row. Square + landscape
+  // lay them out as a horizontal strip.
+  const isVertical = size === "story";
+  const cardBg = isDark ? "#18181b" : "#f4f4f5";
+
+  // Fixed cell dimensions — story rows must be tall enough for the
+  // large grade letter; without this, flex:1 squeezed 7 rows into ~1100px
+  // (157px each) while the grade fontSize was 96px, so labels and
+  // grades overlapped vertically into illegible mush.
+  const storyCellHeight = 150;
+  const dayGradeSize = size === "story" ? 90 : size === "landscape" ? 44 : 56;
+  const dayLabelSize = size === "story" ? 30 : size === "landscape" ? 16 : 20;
+  const dayDateSize = size === "story" ? 24 : size === "landscape" ? 14 : 18;
+  const dayTempSize = size === "story" ? 36 : size === "landscape" ? 18 : 22;
   const bestDayHeading = size === "story" ? 36 : size === "landscape" ? 22 : 28;
-  const bestDayName = size === "story" ? 48 : size === "landscape" ? 28 : 36;
-  const bestDayGrade = size === "story" ? 80 : size === "landscape" ? 44 : 56;
+  const bestDayName = size === "story" ? 44 : size === "landscape" ? 28 : 36;
+  const bestDayGrade = size === "story" ? 76 : size === "landscape" ? 44 : 56;
 
   return (
     <Frame width={w} height={h} bg={bg} size={size}>
@@ -384,47 +391,133 @@ function WeeklyTemplate({
         <div
           style={{
             display: "flex",
-            flexDirection: verticalDayStrip ? "column" : "row",
+            flexDirection: isVertical ? "column" : "row",
             gap: 12,
           }}
         >
-          {days.map((d) => (
-            <div
-              key={d.period.number}
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: verticalDayStrip ? "row" : "column",
-                alignItems: "center",
-                background: isDark ? "#18181b" : "#f4f4f5",
-                borderRadius: 16,
-                padding: size === "story" ? 24 : 12,
-                gap: verticalDayStrip ? 24 : 0,
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", alignItems: verticalDayStrip ? "flex-start" : "center", flex: verticalDayStrip ? 1 : "0 0 auto" }}>
-                <div style={{ display: "flex", fontSize: dayLabelSize, color: muted, textTransform: "uppercase", letterSpacing: 1 }}>
-                  {d.date.toLocaleDateString("en-US", { weekday: verticalDayStrip ? "long" : "short" })}
+          {days.map((d) => {
+            const iconEl = gradeOrIcon(d.score, d.period.shortForecast, d.danger, dayGradeSize);
+            const dayLong = d.date.toLocaleDateString("en-US", { weekday: "long" });
+            const dayShort = d.date.toLocaleDateString("en-US", { weekday: "short" });
+            const dateLabel = d.date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+            if (isVertical) {
+              // Story row: hour-style horizontal layout with fixed height.
+              // Day name and date stack on the left; grade centered;
+              // temp on the right.
+              return (
+                <div
+                  key={d.period.number}
+                  style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    background: cardBg,
+                    borderRadius: 20,
+                    height: storyCellHeight,
+                    paddingLeft: 32,
+                    paddingRight: 32,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      width: 280,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: dayLabelSize,
+                        color: text,
+                        fontWeight: 600,
+                        letterSpacing: 1,
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {dayLong}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: dayDateSize,
+                        color: muted,
+                        marginTop: 4,
+                      }}
+                    >
+                      {dateLabel}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: dayGradeSize,
+                      fontWeight: 800,
+                      color: gradeColor(d.score, accent),
+                      lineHeight: 1,
+                    }}
+                  >
+                    {iconEl ?? d.grade.letter}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: dayTempSize,
+                      color: text,
+                      fontWeight: 600,
+                      width: 110,
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    {`${d.period.temperature}°`}
+                  </div>
                 </div>
-                <div style={{ display: "flex", fontSize: dayDateSize, color: muted, marginTop: 2 }}>
-                  {d.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </div>
-              </div>
+              );
+            }
+
+            // Square / landscape: vertical stack inside each cell.
+            return (
               <div
+                key={d.period.number}
                 style={{
+                  flex: 1,
                   display: "flex",
-                  fontSize: dayGradeSize,
-                  fontWeight: 800,
-                  color: gradeColor(d.score, accent),
-                  marginTop: verticalDayStrip ? 0 : 8,
-                  lineHeight: 1,
+                  flexDirection: "column",
+                  alignItems: "center",
+                  background: cardBg,
+                  borderRadius: 16,
+                  padding: 12,
                 }}
               >
-                {gradeOrIcon(d.score, d.period.shortForecast, d.danger, dayGradeSize) ?? d.grade.letter}
+                <div style={{ display: "flex", fontSize: dayLabelSize, color: muted, textTransform: "uppercase", letterSpacing: 1, whiteSpace: "nowrap" }}>
+                  {dayShort}
+                </div>
+                <div style={{ display: "flex", fontSize: dayDateSize, color: muted, marginTop: 2, whiteSpace: "nowrap" }}>
+                  {dateLabel}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    fontSize: dayGradeSize,
+                    fontWeight: 800,
+                    color: gradeColor(d.score, accent),
+                    marginTop: 8,
+                    lineHeight: 1,
+                  }}
+                >
+                  {iconEl ?? d.grade.letter}
+                </div>
+                <div style={{ display: "flex", fontSize: dayTempSize, color: text, marginTop: 6 }}>
+                  {`${d.period.temperature}°`}
+                </div>
               </div>
-              <div style={{ display: "flex", fontSize: dayTempSize, color: text, marginTop: verticalDayStrip ? 0 : 6, marginLeft: verticalDayStrip ? 16 : 0 }}>{`${d.period.temperature}°`}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {bestDay && (
