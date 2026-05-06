@@ -10,9 +10,11 @@ import {
 import { useCurrentDay } from "@/lib/use-current-day";
 import {
   Wind, CloudRain, Sun, Cloud, CloudSun, Flag,
-  ShieldX, CheckCircle2, AlertTriangle, Loader2,
+  CheckCircle2, AlertTriangle, Loader2,
+  CloudLightning, CloudSnow, CloudFog, Snowflake,
 } from "lucide-react";
 import { AdSlot } from "@/components/ad-slot";
+import { pickWeatherIcon } from "@/components/weather-icon";
 
 // ─── Size detection ─────────────────────────────────────────────
 
@@ -47,10 +49,44 @@ function WeatherIcon({ forecast, className = "h-4 w-4" }: { forecast: string; cl
 }
 
 function RainLabel({ precip, label }: { precip: number; label: string }) {
-  if (precip >= 80) return <span className="text-red-400 font-medium">{label}</span>;
+  // No red even at heavy rain — golfers don't need an emergency alert
+  // for "rain expected", just the level of severity.
+  if (precip >= 80) return <span className="text-amber-500 font-semibold">{label}</span>;
   if (precip >= 60) return <span className="text-orange-400">{label}</span>;
   if (precip >= 40) return <span className="text-amber-400">{label}</span>;
   return <span className="opacity-50">{precip}%</span>;
+}
+
+// Verdict glyph for the embed widget. Routes no-go status to a specific
+// weather icon (rain cloud / lightning / snow / fog) so the visual
+// matches the cause — replaces a generic red shield. Always amber, never
+// red, since the embed displays inside customer pages where red would
+// read as an emergency alert rather than golf weather.
+function VerdictGlyph({ status, forecast, hasBlocking, className }: {
+  status: "go" | "mixed" | "no-go";
+  forecast: string;
+  hasBlocking: boolean;
+  className: string;
+}) {
+  if (status === "go" && !hasBlocking) {
+    return <CheckCircle2 className={className} style={{ color: "var(--accent)" }} />;
+  }
+  if (status === "mixed" && !hasBlocking) {
+    return <AlertTriangle className={`${className} text-amber-400`} />;
+  }
+  const cls = `${className} text-amber-500`;
+  switch (pickWeatherIcon(forecast)) {
+    case "lightning":
+    case "severe": return <CloudLightning className={cls} />;
+    case "heavyRain":
+    case "rain": return <CloudRain className={cls} />;
+    case "snow":
+    case "hail": return <CloudSnow className={cls} />;
+    case "fog": return <CloudFog className={cls} />;
+    case "ice": return <Snowflake className={cls} />;
+    case "wind": return <Wind className={cls} />;
+    default: return <AlertTriangle className={cls} />;
+  }
 }
 
 const ACCENT_COLORS: Record<string, string> = {
@@ -58,9 +94,11 @@ const ACCENT_COLORS: Record<string, string> = {
   red: "#ef4444", orange: "#f97316", zinc: "#71717a",
 };
 
-// Banner shown above the verdict when NWS has an active alert for this point.
-// Blocking-level alerts (tornado, severe thunderstorm, etc.) get red treatment;
-// warning-level get amber. info-level alerts are filtered out before reaching here.
+// Banner shown above the verdict when NWS has an active alert. Both
+// blocking and warning level alerts now use amber — blocking just gets
+// a heavier weight + filled background so the severity is still clear
+// without resorting to red (which read as an emergency alert in a
+// customer's golf-weather widget).
 function AlertBanner({ alert, isDark, size }: {
   alert: WeatherAlert;
   isDark: boolean;
@@ -68,30 +106,27 @@ function AlertBanner({ alert, isDark, size }: {
 }) {
   const blocking = alert.level === "blocking";
   const bgClass = blocking
-    ? (isDark ? "bg-red-950/60 border-red-900" : "bg-red-50 border-red-200")
+    ? (isDark ? "bg-amber-950/60 border-amber-700" : "bg-amber-100 border-amber-400")
     : (isDark ? "bg-amber-950/40 border-amber-900" : "bg-amber-50 border-amber-200");
-  const textClass = blocking
-    ? (isDark ? "text-red-200" : "text-red-800")
-    : (isDark ? "text-amber-200" : "text-amber-800");
-  const subTextClass = blocking
-    ? (isDark ? "text-red-300/70" : "text-red-700/80")
-    : (isDark ? "text-amber-300/70" : "text-amber-700/80");
+  const textClass = isDark ? "text-amber-200" : "text-amber-800";
+  const subTextClass = isDark ? "text-amber-300/70" : "text-amber-700/80";
+  const Icon = pickWeatherIcon(alert.event) === "lightning" ? CloudLightning : AlertTriangle;
+  const fontWeight = blocking ? "font-bold" : "font-semibold";
 
-  // Compact uses a single-line treatment to save vertical space.
   if (size === "compact") {
     return (
       <div className={`rounded-md border ${bgClass} px-2 py-1.5 flex items-center gap-1.5`}>
-        <ShieldX className={`h-3 w-3 shrink-0 ${textClass}`} />
-        <p className={`text-[10px] font-semibold truncate ${textClass}`}>{alert.event}</p>
+        <Icon className={`h-3 w-3 shrink-0 ${textClass}`} />
+        <p className={`text-[10px] ${fontWeight} truncate ${textClass}`}>{alert.event}</p>
       </div>
     );
   }
 
   return (
     <div className={`rounded-lg border ${bgClass} px-3 py-2 flex items-start gap-2`}>
-      <ShieldX className={`${size === "full" ? "h-4 w-4 mt-0.5" : "h-3.5 w-3.5 mt-0.5"} shrink-0 ${textClass}`} />
+      <Icon className={`${size === "full" ? "h-4 w-4 mt-0.5" : "h-3.5 w-3.5 mt-0.5"} shrink-0 ${textClass}`} />
       <div className="flex-1 min-w-0">
-        <p className={`${size === "full" ? "text-sm" : "text-xs"} font-semibold ${textClass}`}>
+        <p className={`${size === "full" ? "text-sm" : "text-xs"} ${fontWeight} ${textClass}`}>
           {alert.event}
         </p>
         <p className={`${size === "full" ? "text-[11px]" : "text-[10px]"} ${subTextClass} line-clamp-2`}>
@@ -102,17 +137,19 @@ function AlertBanner({ alert, isDark, size }: {
   );
 }
 
-// Embed-specific: use accent color for good scores, amber/red for bad
+// Embed-specific: accent for good scores, amber for bad. Never red — the
+// embed renders inside customer pages and a red letter grade reads as an
+// alert rather than a poor weather rating.
 function gradeStyle(score: number): React.CSSProperties {
   if (score >= 60) return { color: "var(--accent)" };
-  if (score >= 40) return { color: "#fbbf24" }; // amber
-  return { color: "#f87171" }; // red
+  if (score >= 40) return { color: "#fbbf24" };
+  return { color: "#f59e0b" };
 }
 
 function statusStyle(status: string): React.CSSProperties {
   if (status === "go") return { color: "var(--accent)" };
   if (status === "mixed") return { color: "#fbbf24" };
-  return { color: "#f87171" };
+  return { color: "#f59e0b" };
 }
 
 // ─── Shared day tab logic ───────────────────────────────────────
@@ -201,7 +238,7 @@ function BlockRow({ block, isDark, compact }: { block: TimeBlock; isDark: boolea
           <WeatherIcon forecast={block.forecast} className="h-3 w-3" />
           <span className="font-mono">{block.temp.high}°</span>
           <span className="flex items-center gap-0.5"><Wind className="h-2.5 w-2.5" />{block.wind.avg}</span>
-          {block.danger ? <span className="text-red-400">{block.rain}</span> :
+          {block.danger ? <span className="text-amber-500 font-medium">{block.rain}</span> :
            block.rain ? <RainLabel precip={block.precip.peak} label={block.rain} /> :
            <span style={{ color: "var(--accent)", opacity: 0.7 }}>Dry</span>}
         </div>
@@ -228,24 +265,24 @@ function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPre
 
   const blocking = alert?.level === "blocking";
   const warning = alert?.level === "warning";
-  // Blocking alerts (lightning, tornado) override the normal grade color —
-  // a green "A" with a tornado warning would be misleading.
-  const gradeOverride: React.CSSProperties | undefined = blocking ? { color: "#f87171" } : undefined;
+  // Blocking alerts (lightning, tornado) override the normal grade color
+  // so a green "A" doesn't sit next to a tornado warning. Amber, not red.
+  const gradeOverride: React.CSSProperties | undefined = blocking ? { color: "#f59e0b" } : undefined;
 
   return (
     <div className="flex flex-col h-full w-full">
       <div className="flex items-center flex-1 min-h-0 px-3 gap-2">
-        {/* Grade — colored red when an alert blocks play. */}
+        {/* Grade — colored amber when an alert blocks play. */}
         <span className="text-2xl font-bold shrink-0" style={gradeOverride ?? gradeStyle(score)}>{grade.letter}</span>
 
         {/* Course + status */}
         <div className="flex-1 min-w-0">
           <p className={`text-[11px] font-medium truncate flex items-center gap-1 ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
-            {blocking && <ShieldX className="h-2.5 w-2.5 text-red-400 shrink-0" />}
+            {blocking && <AlertTriangle className="h-2.5 w-2.5 text-amber-500 shrink-0" />}
             <span className="truncate">{name}</span>
           </p>
           {blocking ? (
-            <p className="text-[9px] text-red-400 font-medium truncate">
+            <p className="text-[9px] text-amber-500 font-semibold truncate">
               {alert!.event} · {selectedPeriod.temperature}°
             </p>
           ) : warning ? (
@@ -543,10 +580,12 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
               {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="medium" />}
               <div className="flex items-center gap-2">
-                {hasBlockingAlert ? <ShieldX className="h-4 w-4 text-red-400 shrink-0" /> :
-                 verdict.status === "go" ? <CheckCircle2 className="h-4 w-4 shrink-0" style={statusStyle("go")} /> :
-                 verdict.status === "mixed" ? <AlertTriangle className="h-4 w-4 shrink-0" style={statusStyle("mixed")} /> :
-                 <ShieldX className="h-4 w-4 text-red-400 shrink-0" />}
+                <VerdictGlyph
+                  status={verdict.status}
+                  forecast={selectedPeriod.shortForecast}
+                  hasBlocking={hasBlockingAlert}
+                  className="h-4 w-4 shrink-0"
+                />
                 <p className="text-xs font-medium flex-1">{verdict.headline}</p>
                 {bestBlock && <span className="text-xl font-bold" style={gradeStyle(bestBlock.score)}>{bestBlock.grade.letter}</span>}
               </div>
@@ -590,10 +629,12 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                 </p>
                 {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="full" />}
                 <div className="flex items-center gap-3">
-                  {hasBlockingAlert ? <ShieldX className="h-5 w-5 text-red-400 shrink-0" /> :
-                   verdict.status === "go" ? <CheckCircle2 className="h-5 w-5 shrink-0" style={statusStyle("go")} /> :
-                   verdict.status === "mixed" ? <AlertTriangle className="h-5 w-5 shrink-0" style={statusStyle("mixed")} /> :
-                   <ShieldX className="h-5 w-5 text-red-400 shrink-0" />}
+                  <VerdictGlyph
+                    status={verdict.status}
+                    forecast={selectedPeriod.shortForecast}
+                    hasBlocking={hasBlockingAlert}
+                    className="h-5 w-5 shrink-0"
+                  />
                   <div className="flex-1">
                     <p className="text-sm font-medium">{verdict.headline}</p>
                     <p className={`text-xs ${m} mt-0.5`}>{verdict.detail}</p>
