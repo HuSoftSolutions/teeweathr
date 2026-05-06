@@ -137,8 +137,16 @@ function generateCode(course: EmbedCourse, config: EmbedConfig, baseUrl: string,
       // breakpoint, etc.). Same idea for height on short viewports.
       // The popup wrapper also caps its width so the × button stays
       // anchored to the iframe's right edge after the iframe shrinks.
+      //
+      // Flex column with align-items glued to the configured corner so
+      // the trigger pill stays anchored to the same edge whether the
+      // popup is open or closed — without this, the wrapper expands to
+      // the popup's 360px width when opened and the (160px) pill ends
+      // up sitting at the inside edge of the popup instead of the
+      // viewport corner.
+      const alignItems = config.position === "bottom-right" ? "flex-end" : "flex-start";
       return `<!-- TeeWeathr Corner Widget - ${course.name} -->
-<div id="${id}" style="position:fixed;${sideKey}:20px;bottom:20px;z-index:9999;max-width:calc(100vw - 40px);">
+<div id="${id}" style="position:fixed;${sideKey}:20px;bottom:20px;z-index:9999;max-width:calc(100vw - 40px);display:flex;flex-direction:column;align-items:${alignItems};">
   <div id="${popupId}" style="display:none;position:relative;margin-bottom:12px;width:${config.width};max-width:calc(100vw - 40px);">
     <iframe
       src="${url}"
