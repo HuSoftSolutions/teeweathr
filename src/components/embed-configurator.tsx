@@ -31,7 +31,7 @@ const FORMATS: { id: EmbedFormat; label: string; description: string; icon: Reac
   { id: "full", label: "Full Section", description: "Full-width embedded section for a dedicated weather page", icon: Monitor },
   { id: "card", label: "Compact Card", description: "Fixed-size card for sidebars or widgets", icon: Smartphone },
   { id: "corner", label: "Corner Popup", description: "Floating button that expands like a chat widget", icon: MessageSquare },
-  { id: "banner", label: "Top Banner", description: "Dismissable banner at the top of the page", icon: BellRing },
+  { id: "banner", label: "Top Banner", description: "Persistent strip at the top of the page", icon: BellRing },
   { id: "inline", label: "Inline Badge", description: "Tiny inline badge showing just the grade", icon: PanelBottomClose },
 ];
 
@@ -175,19 +175,17 @@ function generateCode(course: EmbedCourse, config: EmbedConfig, baseUrl: string,
     }
 
     case "banner":
+      // Banner is intentionally not dismissible — it's a persistent
+      // top-of-page strip the operator wants every visitor to see.
       return `<!-- TeeWeathr Banner - ${course.name} -->
-<div id="teeweathr-banner" style="position:relative;width:100%;">
-  <iframe
-    src="${url}"
-    width="100%"
-    height="${config.height}"
-    style="border:none;border-bottom:1px solid ${config.theme === "dark" ? "#27272a" : "#e4e4e7"};"
-    loading="lazy"
-    title="TeeWeathr - ${course.name}"
-  ></iframe>
-  <button onclick="document.getElementById('teeweathr-banner').remove()"
-    style="position:absolute;top:50%;right:12px;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;background:${config.theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"};color:${config.theme === "dark" ? "#a1a1aa" : "#52525b"};border:none;cursor:pointer;font-size:14px;">×</button>
-</div>`;
+<iframe
+  src="${url}"
+  width="100%"
+  height="${config.height}"
+  style="border:none;border-bottom:1px solid ${config.theme === "dark" ? "#27272a" : "#e4e4e7"};display:block;"
+  loading="lazy"
+  title="TeeWeathr - ${course.name}"
+></iframe>`;
 
     case "inline":
       return `<!-- TeeWeathr Badge - ${course.name} -->
