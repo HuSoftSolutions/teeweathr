@@ -128,9 +128,6 @@ function generateCode(course: EmbedCourse, config: EmbedConfig, baseUrl: string,
       const popupId = `${id}-popup`;
       const triggerId = `${id}-trigger`;
       const sideKey = config.position === "bottom-right" ? "right" : "left";
-      const shadowDark = config.theme === "dark"
-        ? "0 8px 28px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.08)"
-        : "0 8px 28px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.06)";
       // Popup iframe is responsive: max-width caps it to the viewport
       // minus the 20px corner margin on each side, so it never overflows
       // past the screen edge on narrow viewports (mobile, Wix mobile
@@ -161,7 +158,7 @@ function generateCode(course: EmbedCourse, config: EmbedConfig, baseUrl: string,
   </div>
   <div id="${triggerId}"
     onclick="var p=document.getElementById('${popupId}');p.style.display=p.style.display==='none'?'block':'none';"
-    style="cursor:pointer;width:160px;height:44px;border-radius:22px;overflow:hidden;box-shadow:${shadowDark};">
+    style="cursor:pointer;width:160px;height:44px;border-radius:22px;overflow:hidden;">
     <iframe
       src="${pillUrl}"
       width="160"
