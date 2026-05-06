@@ -149,7 +149,7 @@ function generateCode(course: EmbedCourse, config: EmbedConfig, baseUrl: string,
       src="${url}"
       width="${config.width}"
       height="${config.height}"
-      style="border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.3);display:block;width:100%;height:${config.height};max-height:calc(100vh - 100px);"
+      style="border:none;border-radius:16px;display:block;width:100%;height:${config.height};max-height:calc(100vh - 100px);"
       loading="lazy"
       title="TeeWeathr - ${course.name}"
     ></iframe>
