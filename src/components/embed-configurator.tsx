@@ -120,55 +120,24 @@ function generateCode(course: EmbedCourse, config: EmbedConfig, baseUrl: string,
 ></iframe>`;
 
     case "corner": {
-      // Closed state is a TeeWeathr-branded pill iframe (loads ?view=pill)
-      // showing today's grade. Click anywhere on the wrapper opens the
-      // full popup. The iframe inside the trigger uses pointer-events:none
-      // so clicks fall through to the wrapper's onclick.
-      const pillUrl = url + (url.includes("?") ? "&" : "?") + "view=pill";
-      const popupId = `${id}-popup`;
-      const triggerId = `${id}-trigger`;
-      const sideKey = config.position === "bottom-right" ? "right" : "left";
-      // Popup iframe is responsive: max-width caps it to the viewport
-      // minus the 20px corner margin on each side, so it never overflows
-      // past the screen edge on narrow viewports (mobile, Wix mobile
-      // breakpoint, etc.). Same idea for height on short viewports.
-      // The popup wrapper also caps its width so the × button stays
-      // anchored to the iframe's right edge after the iframe shrinks.
-      //
-      // Flex column with align-items glued to the configured corner so
-      // the trigger pill stays anchored to the same edge whether the
-      // popup is open or closed — without this, the wrapper expands to
-      // the popup's 360px width when opened and the (160px) pill ends
-      // up sitting at the inside edge of the popup instead of the
-      // viewport corner.
-      const alignItems = config.position === "bottom-right" ? "flex-end" : "flex-start";
+      // Single-script installer. The /api/embed-script/corner endpoint
+      // returns vanilla JS that creates the wrapper + iframes and appends
+      // them to document.body, with all event handlers attached via
+      // addEventListener (so React/Vue/etc. don't strip them as inline
+      // onclicks). Drops anywhere — Wix HTML embed, React via <Script>,
+      // plain HTML, all the same.
+      void id; // installer derives a deterministic id from key + course
+      const params = new URLSearchParams();
+      if (apiKey) params.set("key", apiKey);
+      params.set("course", course.id);
+      if (config.theme && config.theme !== "dark") params.set("theme", config.theme);
+      if (config.accent && config.accent !== "default") params.set("accent", config.accent);
+      if (config.position && config.position !== "bottom-right") params.set("position", config.position);
+      if (config.width && config.width !== "360px") params.set("width", config.width);
+      if (config.height && config.height !== "460px") params.set("height", config.height);
+      const scriptUrl = `${baseUrl}/api/embed-script/corner?${params.toString()}`;
       return `<!-- TeeWeathr Corner Widget - ${course.name} -->
-<div id="${id}" style="position:fixed;${sideKey}:20px;bottom:20px;z-index:9999;max-width:calc(100vw - 40px);display:flex;flex-direction:column;align-items:${alignItems};">
-  <div id="${popupId}" style="display:none;position:relative;margin-bottom:12px;width:${config.width};max-width:calc(100vw - 40px);">
-    <iframe
-      src="${url}"
-      width="${config.width}"
-      height="${config.height}"
-      style="border:none;border-radius:16px;display:block;width:100%;height:${config.height};max-height:calc(100vh - 100px);"
-      loading="lazy"
-      title="TeeWeathr - ${course.name}"
-    ></iframe>
-    <button onclick="document.getElementById('${popupId}').style.display='none'"
-      style="position:absolute;top:8px;${sideKey}:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.5);color:white;border:none;cursor:pointer;font-size:16px;">×</button>
-  </div>
-  <div id="${triggerId}"
-    onclick="var p=document.getElementById('${popupId}');p.style.display=p.style.display==='none'?'block':'none';"
-    style="cursor:pointer;width:160px;height:44px;border-radius:22px;overflow:hidden;">
-    <iframe
-      src="${pillUrl}"
-      width="160"
-      height="44"
-      style="border:none;display:block;pointer-events:none;"
-      loading="lazy"
-      title="TeeWeathr forecast"
-    ></iframe>
-  </div>
-</div>`;
+<script src="${scriptUrl}" async></script>`;
     }
 
     case "banner":
