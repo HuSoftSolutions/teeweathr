@@ -20,22 +20,24 @@ import { pickWeatherIcon } from "@/components/weather-icon";
 
 type WidgetSize = "micro" | "compact" | "medium" | "full";
 
-function useWidgetSize(ref: React.RefObject<HTMLDivElement | null>): WidgetSize {
-  const [size, setSize] = useState<WidgetSize>("full");
+function useWidgetSize(ref: React.RefObject<HTMLDivElement | null>): { size: WidgetSize; width: number } {
+  const [state, setState] = useState<{ size: WidgetSize; width: number }>({ size: "full", width: 0 });
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
-      if (width < 320 || height < 120) setSize("micro");
-      else if (width < 400 || height < 300) setSize("compact");
-      else if (width < 500 || height < 500) setSize("medium");
-      else setSize("full");
+      let size: WidgetSize;
+      if (width < 320 || height < 120) size = "micro";
+      else if (width < 400 || height < 300) size = "compact";
+      else if (width < 500 || height < 500) size = "medium";
+      else size = "full";
+      setState({ size, width });
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, [ref]);
-  return size;
+  return state;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -303,13 +305,26 @@ function PillView({ score, isDark, forecast, danger }: {
 
 // ─── Micro View (banner + inline badge) ─────────────────────────
 
-function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds, todayStr, tmrwStr, alert }: {
+function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds, todayStr, tmrwStr, alert, weather, dayPeriods, selectedDayIndex, onSelectDay, widgetWidth }: {
   score: number; name: string; isDark: boolean;
   selectedPeriod: WeatherPeriod; onPrev: () => void; onNext: () => void;
   hasPrev: boolean; hasNext: boolean; showAds: boolean;
   todayStr: string; tmrwStr: string;
   alert?: WeatherAlert | null;
+  weather: WeatherData;
+  dayPeriods: WeatherPeriod[];
+  selectedDayIndex: number;
+  onSelectDay: (i: number) => void;
+  widgetWidth: number;
 }) {
+  // Banner-shape (wide × short) micros get an inline day strip filling
+  // the otherwise-empty middle — each chip shows weekday abbrev + grade
+  // and is clickable. Narrow micros (mobile banner, inline badge) keep
+  // the prev/next + date label since chips wouldn't fit.
+  const wideEnoughForChips = widgetWidth >= 640;
+  // Each chip is roughly 56px including padding/gap; reserve ~280px
+  // for the grade + course-name column and ~24px for end padding.
+  const dayChipCount = Math.max(0, Math.min(7, Math.floor((widgetWidth - 304) / 56)));
   const grade = getGrade(score);
   const m = isDark ? "text-zinc-500" : "text-zinc-400";
   const date = new Date(selectedPeriod.startTime);
@@ -350,22 +365,56 @@ function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPre
           )}
         </div>
 
-        {/* Date + nav arrows */}
-        <div className="flex items-center gap-1 shrink-0">
-          <button onClick={onPrev} disabled={!hasPrev}
-            className={`p-0.5 rounded transition-colors ${hasPrev ? `${isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${m}` : "opacity-20"}`}
-            aria-label="Previous day">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
-          </button>
-          <span className={`text-[10px] font-medium min-w-[52px] text-center ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
-            {dateLabel}
-          </span>
-          <button onClick={onNext} disabled={!hasNext}
-            className={`p-0.5 rounded transition-colors ${hasNext ? `${isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${m}` : "opacity-20"}`}
-            aria-label="Next day">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
-          </button>
-        </div>
+        {wideEnoughForChips && dayChipCount > 0 ? (
+          <div className="flex items-center gap-1 shrink-0">
+            {dayPeriods.slice(0, dayChipCount).map((period) => {
+              const pIdx = weather.periods.indexOf(period);
+              const sel = pIdx === selectedDayIndex;
+              const date = new Date(period.startTime);
+              const isToday = date.toDateString() === todayStr;
+              const isTmrw = date.toDateString() === tmrwStr;
+              const label = isToday ? "Tod" : isTmrw ? "Tmrw" : date.toLocaleDateString([], { weekday: "short" });
+              const dh = getHourlyForDay(weather.hourly, period);
+              const db = analyzeTimeBlocks(dh);
+              const best = db.length > 0
+                ? Math.max(...db.map((b) => b.score))
+                : calculateGolfConditions(period).score;
+              return (
+                <button
+                  key={period.number}
+                  onClick={() => onSelectDay(pIdx)}
+                  className={`flex flex-col items-center justify-center px-2 py-1 rounded-md transition-colors min-w-[44px] ${
+                    sel
+                      ? isDark ? "bg-zinc-800" : "bg-zinc-100"
+                      : isDark ? "hover:bg-zinc-900/60" : "hover:bg-zinc-50"
+                  }`}
+                  aria-label={date.toDateString()}
+                >
+                  <span className={`text-[8px] uppercase tracking-wider font-medium ${m}`}>{label}</span>
+                  <span className="text-[12px] font-bold leading-none mt-0.5" style={gradeStyle(best)}>
+                    {getGrade(best).letter}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={onPrev} disabled={!hasPrev}
+              className={`p-0.5 rounded transition-colors ${hasPrev ? `${isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${m}` : "opacity-20"}`}
+              aria-label="Previous day">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <span className={`text-[10px] font-medium min-w-[52px] text-center ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
+              {dateLabel}
+            </span>
+            <button onClick={onNext} disabled={!hasNext}
+              className={`p-0.5 rounded transition-colors ${hasNext ? `${isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${m}` : "opacity-20"}`}
+              aria-label="Next day">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+        )}
       </div>
       {showAds && <AdSlot isDark={isDark} variant="micro" />}
     </div>
@@ -449,7 +498,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   }, [apiKey, resolvedCourseId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const widgetSize = useWidgetSize(containerRef);
+  const { size: widgetSize, width: widgetWidth } = useWidgetSize(containerRef);
 
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
@@ -592,6 +641,11 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               tmrwStr={tmrwStr}
               alert={topAlert}
               selectedPeriod={selectedPeriod}
+              weather={weather}
+              dayPeriods={dayPeriods}
+              selectedDayIndex={selectedDayIndex}
+              widgetWidth={widgetWidth}
+              onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }}
               hasPrev={dayPeriods.findIndex((p) => weather.periods.indexOf(p) === selectedDayIndex) > 0}
               hasNext={dayPeriods.findIndex((p) => weather.periods.indexOf(p) === selectedDayIndex) < dayPeriods.length - 1}
               onPrev={() => {
