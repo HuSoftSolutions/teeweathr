@@ -92,3 +92,9 @@
     @apply font-sans;
   }
 }
+
+/* Hide the floating reCAPTCHA badge. Google permits this as long as the
+   required attribution is shown in the footer (see /signup, /, /integration). */
+.grecaptcha-badge {
+  visibility: hidden !important;
+}

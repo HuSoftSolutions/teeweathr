@@ -218,21 +218,22 @@ function SignupForm() {
             {loading ? "Creating account..." : plan === "pro" ? "Continue to checkout" : "Create account"}
           </button>
 
-          {recaptchaSiteKey && (
-            <p className="text-[10px] text-zinc-600 text-center mt-2">
-              Protected by reCAPTCHA. Google&rsquo;s{" "}
-              <a href="https://policies.google.com/privacy" className="underline hover:text-zinc-400">Privacy Policy</a>
-              {" "}and{" "}
-              <a href="https://policies.google.com/terms" className="underline hover:text-zinc-400">Terms of Service</a>
-              {" "}apply.
-            </p>
-          )}
         </form>
 
         <p className="mt-8 text-center text-sm text-zinc-500">
           Already have an account?{" "}
           <Link href="/login" className="text-emerald-400 hover:text-emerald-300">Log in</Link>
         </p>
+
+        {recaptchaSiteKey && (
+          <p className="mt-10 text-center text-[10px] text-zinc-600">
+            This site is protected by reCAPTCHA and the Google{" "}
+            <a href="https://policies.google.com/privacy" className="underline hover:text-zinc-400" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+            {" "}and{" "}
+            <a href="https://policies.google.com/terms" className="underline hover:text-zinc-400" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            {" "}apply.
+          </p>
+        )}
       </div>
     </div>
   );

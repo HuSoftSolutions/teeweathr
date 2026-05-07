@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Flag, ArrowRight } from "lucide-react";
 import { CourseSearch } from "@/components/marketing/course-search";
+import { HowItWorks } from "@/components/marketing/how-it-works";
 
 export const metadata: Metadata = {
   title: "TeeWeathr — Honest Golf Weather Forecasts",
@@ -21,6 +22,7 @@ function Nav() {
           <span className="text-sm font-semibold text-zinc-900 tracking-tight">TeeWeathr</span>
         </Link>
         <div className="flex items-center gap-5 text-sm">
+          <HowItWorks />
           <Link
             href="/integration"
             className="hidden sm:inline-flex items-center gap-1 text-zinc-600 hover:text-zinc-900 transition-colors"
@@ -111,8 +113,15 @@ function Footer() {
           <Link href="/login" className="hover:text-zinc-800 transition-colors">Log in</Link>
         </div>
       </div>
-      <p className="text-center text-[11px] text-zinc-400 pb-6">
+      <p className="text-center text-[11px] text-zinc-400 pb-2">
         Weather data: U.S. National Weather Service.
+      </p>
+      <p className="text-center text-[10px] text-zinc-400 pb-6">
+        This site is protected by reCAPTCHA and the Google{" "}
+        <a href="https://policies.google.com/privacy" className="underline hover:text-zinc-600" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        {" "}and{" "}
+        <a href="https://policies.google.com/terms" className="underline hover:text-zinc-600" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+        {" "}apply.
       </p>
     </footer>
   );

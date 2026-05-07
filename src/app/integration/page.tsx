@@ -6,6 +6,7 @@ import {
   Palette, Zap, Smartphone, ShieldCheck,
 } from "lucide-react";
 import { LiveTry } from "@/components/marketing/live-try";
+import { OperatorWalkthrough } from "@/components/marketing/operator-walkthrough";
 import { DEMO_API_KEY } from "@/lib/demo";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ function Nav() {
           <span className="text-sm font-semibold text-zinc-900 tracking-tight">TeeWeathr</span>
         </Link>
         <nav className="hidden md:flex items-center gap-7 text-sm text-zinc-600">
+          <OperatorWalkthrough />
           <a href="#how-it-works" className="hover:text-zinc-900 transition-colors">How it works</a>
           <a href="#embed" className="hover:text-zinc-900 transition-colors">Embed</a>
           <Link href="/pricing" className="hover:text-zinc-900 transition-colors">Pricing</Link>
@@ -711,8 +713,15 @@ function Footer() {
           <Link href="/signup" className="hover:text-zinc-800 transition-colors">Sign up</Link>
         </div>
       </div>
-      <p className="text-center text-[11px] text-zinc-400 pb-6">
+      <p className="text-center text-[11px] text-zinc-400 pb-2">
         Weather data: U.S. National Weather Service.
+      </p>
+      <p className="text-center text-[10px] text-zinc-400 pb-6">
+        This site is protected by reCAPTCHA and the Google{" "}
+        <a href="https://policies.google.com/privacy" className="underline hover:text-zinc-600" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        {" "}and{" "}
+        <a href="https://policies.google.com/terms" className="underline hover:text-zinc-600" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+        {" "}apply.
       </p>
     </footer>
   );
