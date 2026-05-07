@@ -21,6 +21,7 @@ type EmbedConfigData = {
     par?: number;
     city?: string;
     state?: string;
+    timezone?: string;
   };
   tier: string;
   features: {
@@ -116,6 +117,7 @@ async function loadEmbedConfigUncached(
         par: course.par,
         city: course.city,
         state: course.state,
+        timezone: course.timezone,
       },
       tier,
       features,

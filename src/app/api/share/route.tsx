@@ -11,6 +11,7 @@ import {
   type TimeBlock,
 } from "@/lib/golf-scoring";
 import { WeatherIcon, pickWeatherIcon } from "@/components/weather-icon";
+import { dayKeyInTz, formatInTz, hourInTz } from "@/lib/course-time";
 import { logger } from "@/lib/logger";
 
 // Sizes (width × height in px). Match common social aspect ratios.
@@ -69,7 +70,7 @@ async function fetchCourseAndWeather(req: NextRequest, apiKey: string) {
     throw new Error(`config-fetch:${cfgRes.status}`);
   }
   const cfg = (await cfgRes.json()) as {
-    course?: { name: string; lat: number; lon: number };
+    course?: { name: string; lat: number; lon: number; timezone?: string };
     tier?: string;
     embedParams?: { theme?: string; accent?: string };
     features?: { showBranding?: boolean };
@@ -94,14 +95,16 @@ async function fetchCourseAndWeather(req: NextRequest, apiKey: string) {
 // Parse the YYYY-MM-DD as local components rather than `new Date(dateStr)`,
 // which interprets a bare ISO date as UTC midnight and then shifts the
 // day backwards in negative-offset server timezones (e.g. dev on EST).
-function pickDayPeriod(weather: WeatherData, dateStr: string | null): WeatherPeriod {
+function pickDayPeriod(weather: WeatherData, dateStr: string | null, tz: string | undefined | null): WeatherPeriod {
   const dayPeriods = weather.periods.filter((p) => p.isDaytime);
   if (!dateStr) return dayPeriods[0] ?? weather.periods[0];
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
   if (!m) return dayPeriods[0] ?? weather.periods[0];
-  const target = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toDateString();
+  // dateStr is already in YYYY-MM-DD form — match on the same shape in
+  // the course's tz so cross-timezone date params resolve unambiguously.
+  const target = `${m[1]}-${m[2]}-${m[3]}`;
   return (
-    dayPeriods.find((p) => new Date(p.startTime).toDateString() === target) ??
+    dayPeriods.find((p) => dayKeyInTz(p.startTime, tz) === target) ??
     dayPeriods[0] ??
     weather.periods[0]
   );
@@ -315,6 +318,7 @@ function WeeklyTemplate({
   courseName,
   weather,
   showWatermark,
+  tz,
 }: {
   size: ShareSize;
   theme: Theme;
@@ -322,6 +326,7 @@ function WeeklyTemplate({
   courseName: string;
   weather: WeatherData;
   showWatermark: boolean;
+  tz: string | undefined | null;
 }) {
   const { w, h } = SIZES[size];
   const isDark = theme === "dark";
@@ -333,8 +338,8 @@ function WeeklyTemplate({
     .filter((p) => p.isDaytime)
     .slice(0, 7)
     .map((p) => {
-      const hourly = getHourlyForDay(weather.hourly, p);
-      const blocks = analyzeTimeBlocks(hourly);
+      const hourly = getHourlyForDay(weather.hourly, p, tz);
+      const blocks = analyzeTimeBlocks(hourly, tz);
       const best = blocks.length > 0 ? blocks.reduce((a, b) => (b.score > a.score ? b : a)) : null;
       const score = best?.score ?? 50;
       // Day-level danger: if any block flags lightning OR the day's
@@ -348,7 +353,7 @@ function WeeklyTemplate({
         score,
         grade: getGrade(score),
         danger,
-        date: new Date(p.startTime),
+        startTime: p.startTime,
       };
     });
 
@@ -403,9 +408,9 @@ function WeeklyTemplate({
         >
           {days.map((d) => {
             const iconEl = gradeOrIcon(d.score, d.period.shortForecast, d.danger, dayGradeSize);
-            const dayLong = d.date.toLocaleDateString("en-US", { weekday: "long" });
-            const dayShort = d.date.toLocaleDateString("en-US", { weekday: "short" });
-            const dateLabel = d.date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+            const dayLong = formatInTz(d.startTime, tz, { weekday: "long" });
+            const dayShort = formatInTz(d.startTime, tz, { weekday: "short" });
+            const dateLabel = formatInTz(d.startTime, tz, { month: "short", day: "numeric" });
 
             if (isVertical) {
               // Story row: hour-style horizontal layout with fixed height.
@@ -540,7 +545,7 @@ function WeeklyTemplate({
           >
             <div style={{ display: "flex", fontSize: bestDayHeading, color: muted }}>Best day this week</div>
             <div style={{ display: "flex", fontSize: bestDayName, fontWeight: 700 }}>
-              {bestDay.date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+              {formatInTz(bestDay.startTime, tz, { weekday: "long", month: "long", day: "numeric" })}
             </div>
             <div
               style={{
@@ -570,6 +575,7 @@ function HourlyTemplate({
   hourly,
   dateLabel,
   showWatermark,
+  tz,
 }: {
   size: ShareSize;
   theme: Theme;
@@ -578,6 +584,7 @@ function HourlyTemplate({
   hourly: WeatherPeriod[];
   dateLabel: string;
   showWatermark: boolean;
+  tz: string | undefined | null;
 }) {
   const { w, h } = SIZES[size];
   const isDark = theme === "dark";
@@ -592,7 +599,7 @@ function HourlyTemplate({
   // cell room to breathe at every aspect ratio.
   const slots = hourly
     .filter((p) => {
-      const hr = new Date(p.startTime).getHours();
+      const hr = hourInTz(p.startTime, tz);
       return hr >= 6 && hr <= 20 && hr % 2 === 0;
     })
     .slice(0, 8);
@@ -638,7 +645,7 @@ function HourlyTemplate({
           }}
         >
           {slots.map((s) => {
-            const hour = new Date(s.startTime).getHours();
+            const hour = hourInTz(s.startTime, tz);
             const label = hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`;
             // Use the real golf score so per-hour grades reflect the
             // same caps the verdict uses (rain ≥ 50 → D, lightning → D,
@@ -794,6 +801,7 @@ export async function GET(request: NextRequest) {
   const accentName = accentOverride ?? cfg.embedParams?.accent ?? "default";
   const accent = ACCENT_COLORS[accentName] ?? ACCENT_COLORS.default;
   const courseName = cfg.course!.name;
+  const tz = cfg.course!.timezone;
 
   const { w, h } = SIZES[size];
 
@@ -807,12 +815,13 @@ export async function GET(request: NextRequest) {
         courseName={courseName}
         weather={weather}
         showWatermark={showWatermark}
+        tz={tz}
       />
     );
   } else if (format === "hourly") {
-    const period = pickDayPeriod(weather, date);
-    const hourly = getHourlyForDay(weather.hourly, period);
-    const dateLabel = new Date(period.startTime).toLocaleDateString("en-US", {
+    const period = pickDayPeriod(weather, date, tz);
+    const hourly = getHourlyForDay(weather.hourly, period, tz);
+    const dateLabel = formatInTz(period.startTime, tz, {
       weekday: "long",
       month: "long",
       day: "numeric",
@@ -826,15 +835,16 @@ export async function GET(request: NextRequest) {
         hourly={hourly}
         dateLabel={dateLabel}
         showWatermark={showWatermark}
+        tz={tz}
       />
     );
   } else {
-    const period = pickDayPeriod(weather, date);
-    const hourly = getHourlyForDay(weather.hourly, period);
-    const blocks = analyzeTimeBlocks(hourly);
-    const verdict = analyzeDayVerdict(period, hourly);
+    const period = pickDayPeriod(weather, date, tz);
+    const hourly = getHourlyForDay(weather.hourly, period, tz);
+    const blocks = analyzeTimeBlocks(hourly, tz);
+    const verdict = analyzeDayVerdict(period, hourly, tz);
     const best = blocks.length > 0 ? blocks.reduce((a, b) => (b.score > a.score ? b : a)) : null;
-    const dateLabel = new Date(period.startTime).toLocaleDateString("en-US", {
+    const dateLabel = formatInTz(period.startTime, tz, {
       weekday: "long",
       month: "long",
       day: "numeric",

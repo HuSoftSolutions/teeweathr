@@ -5,6 +5,7 @@ import { verifySession } from "@/lib/firebase/session";
 import { db } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { getPlaceDetails, slugifyCourseName } from "@/lib/places";
+import { fetchNwsPoints } from "@/lib/nws-points";
 import { EMBED_CONFIG_TAG } from "@/app/api/embed/[apiKey]/route";
 import { logger } from "@/lib/logger";
 
@@ -105,11 +106,16 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Unclaimed (admin pre-populated, or demo etc.) → claim it.
+      // Unclaimed (admin pre-populated, or demo etc.) → claim it. Also
+      // backfill timezone if missing so the operator's first weather view
+      // already renders in the course's tz.
+      const needsTz = !existingData.timezone;
+      const tz = needsTz ? (await fetchNwsPoints(place.lat, place.lon))?.timeZone : null;
       const batch = db.batch();
       batch.update(existing.ref, {
         claimedBy: user.businessId,
         claimStatus: "claimed",
+        ...(needsTz && tz ? { timezone: tz } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       });
       batch.update(bizDoc.ref, {
@@ -132,6 +138,11 @@ export async function POST(request: NextRequest) {
       courseId = `${baseSlug}-${place.placeId.slice(-6).toLowerCase()}`;
     }
 
+    // Resolve IANA timezone from NWS so every display op renders in the
+    // course's local zone, not the viewer's. Non-fatal on failure — we
+    // can backfill later if NWS hiccups.
+    const nws = await fetchNwsPoints(place.lat, place.lon);
+
     const batch = db.batch();
     batch.set(db.collection("courses").doc(courseId), {
       name: place.name,
@@ -143,6 +154,7 @@ export async function POST(request: NextRequest) {
       formattedAddress: place.formattedAddress,
       placeId: place.placeId,
       placeTypes: place.types,
+      timezone: nws?.timeZone ?? null,
       claimedBy: user.businessId,
       claimStatus: "claimed",
       source: "places",

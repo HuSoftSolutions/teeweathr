@@ -8,6 +8,8 @@ import {
   analyzeTimeBlocks, type TimeBlock,
 } from "@/lib/golf-scoring";
 import { useCurrentDay } from "@/lib/use-current-day";
+import { dayKeyInTz, formatInTz, hourInTz, tomorrowKeyInTz, tzShortLabel } from "@/lib/course-time";
+import { useViewerTz } from "@/lib/use-viewer-tz";
 import {
   Wind, CloudRain, Sun, Cloud, CloudSun, Flag,
   CheckCircle2, AlertTriangle, Loader2,
@@ -156,22 +158,22 @@ function statusStyle(status: string): React.CSSProperties {
 
 // ─── Shared day tab logic ───────────────────────────────────────
 
-function DayTabRow({ weather, dayPeriods, selectedDayIndex, onSelectDay, isDark, isCompact, todayStr, tmrwStr }: {
+function DayTabRow({ weather, dayPeriods, selectedDayIndex, onSelectDay, isDark, isCompact, todayStr, tmrwStr, tz }: {
   weather: WeatherData; dayPeriods: WeatherPeriod[]; selectedDayIndex: number;
   onSelectDay: (i: number) => void; isDark: boolean; isCompact?: boolean;
-  todayStr: string; tmrwStr: string;
+  todayStr: string; tmrwStr: string; tz: string | undefined | null;
 }) {
   return (
     <div className={`flex ${isDark ? "border-zinc-800" : "border-zinc-200"} border-b overflow-x-auto`}>
       {dayPeriods.slice(0, isCompact ? 5 : undefined).map((period) => {
         const pIdx = weather.periods.indexOf(period);
         const sel = pIdx === selectedDayIndex;
-        const date = new Date(period.startTime);
-        const label = date.toDateString() === todayStr ? (isCompact ? "Tod" : "Today")
-          : date.toDateString() === tmrwStr ? "Tmrw"
-          : date.toLocaleDateString([], { weekday: "short" });
-        const dh = getHourlyForDay(weather.hourly, period);
-        const db = analyzeTimeBlocks(dh);
+        const periodKey = dayKeyInTz(period.startTime, tz);
+        const label = periodKey === todayStr ? (isCompact ? "Tod" : "Today")
+          : periodKey === tmrwStr ? "Tmrw"
+          : formatInTz(period.startTime, tz, { weekday: "short" });
+        const dh = getHourlyForDay(weather.hourly, period, tz);
+        const db = analyzeTimeBlocks(dh, tz);
         const best = db.length > 0 ? Math.max(...db.map((b) => b.score)) : calculateGolfConditions(period).score;
         return (
           <button key={period.number} onClick={() => onSelectDay(pIdx)}
@@ -182,7 +184,7 @@ function DayTabRow({ weather, dayPeriods, selectedDayIndex, onSelectDay, isDark,
             <span className={`${isCompact ? "text-[8px]" : "text-[9px]"} font-medium uppercase tracking-wider`}>{label}</span>
             {!isCompact && (
               <span className={`text-[8px] ${sel ? (isDark ? "text-zinc-400" : "text-zinc-500") : (isDark ? "text-zinc-700" : "text-zinc-300")} -mt-0.5`}>
-                {date.toLocaleDateString([], { month: "short", day: "numeric" })}
+                {formatInTz(period.startTime, tz, { month: "short", day: "numeric" })}
               </span>
             )}
             <span className={`${isCompact ? "text-[11px]" : "text-sm"} font-bold`} style={sel ? gradeStyle(best) : undefined}>{getGrade(best).letter}</span>
@@ -305,11 +307,11 @@ function PillView({ score, isDark, forecast, danger }: {
 
 // ─── Micro View (banner + inline badge) ─────────────────────────
 
-function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds, todayStr, tmrwStr, alert, weather, dayPeriods, selectedDayIndex, onSelectDay, widgetWidth }: {
+function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPrev, hasNext, showAds, todayStr, tmrwStr, tz, alert, weather, dayPeriods, selectedDayIndex, onSelectDay, widgetWidth }: {
   score: number; name: string; isDark: boolean;
   selectedPeriod: WeatherPeriod; onPrev: () => void; onNext: () => void;
   hasPrev: boolean; hasNext: boolean; showAds: boolean;
-  todayStr: string; tmrwStr: string;
+  todayStr: string; tmrwStr: string; tz: string | undefined | null;
   alert?: WeatherAlert | null;
   weather: WeatherData;
   dayPeriods: WeatherPeriod[];
@@ -327,10 +329,10 @@ function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPre
   const dayChipCount = Math.max(0, Math.min(7, Math.floor((widgetWidth - 304) / 56)));
   const grade = getGrade(score);
   const m = isDark ? "text-zinc-500" : "text-zinc-400";
-  const date = new Date(selectedPeriod.startTime);
-  const dateLabel = date.toDateString() === todayStr ? "Today"
-    : date.toDateString() === tmrwStr ? "Tomorrow"
-    : date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  const periodKey = dayKeyInTz(selectedPeriod.startTime, tz);
+  const dateLabel = periodKey === todayStr ? "Today"
+    : periodKey === tmrwStr ? "Tomorrow"
+    : formatInTz(selectedPeriod.startTime, tz, { weekday: "short", month: "short", day: "numeric" });
 
   const blocking = alert?.level === "blocking";
   const warning = alert?.level === "warning";
@@ -370,12 +372,12 @@ function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPre
             {dayPeriods.slice(0, dayChipCount).map((period) => {
               const pIdx = weather.periods.indexOf(period);
               const sel = pIdx === selectedDayIndex;
-              const date = new Date(period.startTime);
-              const isToday = date.toDateString() === todayStr;
-              const isTmrw = date.toDateString() === tmrwStr;
-              const label = isToday ? "Tod" : isTmrw ? "Tmrw" : date.toLocaleDateString([], { weekday: "short" });
-              const dh = getHourlyForDay(weather.hourly, period);
-              const db = analyzeTimeBlocks(dh);
+              const pKey = dayKeyInTz(period.startTime, tz);
+              const isToday = pKey === todayStr;
+              const isTmrw = pKey === tmrwStr;
+              const label = isToday ? "Tod" : isTmrw ? "Tmrw" : formatInTz(period.startTime, tz, { weekday: "short" });
+              const dh = getHourlyForDay(weather.hourly, period, tz);
+              const db = analyzeTimeBlocks(dh, tz);
               const best = db.length > 0
                 ? Math.max(...db.map((b) => b.score))
                 : calculateGolfConditions(period).score;
@@ -388,7 +390,7 @@ function MicroView({ score, name, isDark, selectedPeriod, onPrev, onNext, hasPre
                       ? isDark ? "bg-zinc-800" : "bg-zinc-100"
                       : isDark ? "hover:bg-zinc-900/60" : "hover:bg-zinc-50"
                   }`}
-                  aria-label={date.toDateString()}
+                  aria-label={pKey}
                 >
                   <span className={`text-[8px] uppercase tracking-wider font-medium ${m}`}>{label}</span>
                   <span className="text-[12px] font-bold leading-none mt-0.5" style={gradeStyle(best)}>
@@ -433,7 +435,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   const [serverConfig, setServerConfig] = useState<{
     lat: string; lon: string; name: string; holes: number; par?: number;
     theme: string; accent: string; showAds: boolean; showBranding: boolean;
-    courseId: string;
+    courseId: string; timezone?: string;
   } | null>(null);
   const [configLoading, setConfigLoading] = useState(!!apiKey);
 
@@ -454,6 +456,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
           showAds: data.features.showAds,
           showBranding: data.features.showBranding,
           courseId: data.courseId,
+          timezone: data.course.timezone,
         });
       })
       .catch(() => {})
@@ -472,6 +475,10 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   // Server-enforced: if API key is present, ONLY the server decides these
   const showBranding = apiKey ? (serverConfig?.showBranding ?? true) : params.branding !== "false";
   const showAds = apiKey ? (serverConfig?.showAds ?? false) : params.ads === "true";
+  // Course IANA tz — comes from the Firestore course doc when an API key
+  // is present, otherwise we fall back to viewer tz (URL-param embeds are
+  // a dev/preview path).
+  const tz = serverConfig?.timezone || params.tz;
   // Forced view override — corner-popup embed snippet uses ?view=pill so
   // its closed-state pill always renders the compact badge regardless of
   // detected iframe size.
@@ -507,12 +514,13 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const todayStr = useCurrentDay(useCallback(() => { setRefreshKey((k) => k + 1); }, []));
-  const tmrwStr = useMemo(() => {
-    const d = new Date(todayStr);
-    d.setDate(d.getDate() + 1);
-    return d.toDateString();
-  }, [todayStr]);
+  const todayStr = useCurrentDay(tz, useCallback(() => { setRefreshKey((k) => k + 1); }, []));
+  const tmrwStr = useMemo(() => (tz ? tomorrowKeyInTz(tz) : ""), [tz]);
+  // "Course time · PST" hint — shown only on medium/full sizes when the
+  // viewer's tz differs from the course's. Empty string until mount so SSR
+  // and client agree (no hydration flicker).
+  const viewerTz = useViewerTz();
+  const tzHint = !!viewerTz && !!tz && viewerTz !== tz ? tzShortLabel(tz) : "";
 
   const fetchWeather = useCallback(async () => {
     try {
@@ -523,7 +531,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
       if (!wRes.ok) throw new Error();
       const data: WeatherData = await wRes.json();
       setWeather(data);
-      if (new Date().getHours() >= 18) {
+      if (hourInTz(new Date(), tz) >= 18) {
         const tmrwIdx = data.periods.findIndex((p, i) => i > 0 && p.isDaytime);
         if (tmrwIdx > 0) setSelectedDayIndex(tmrwIdx);
       }
@@ -561,13 +569,13 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
 
   const blocks = useMemo(() => {
     if (!weather || !selectedPeriod) return [];
-    return analyzeTimeBlocks(getHourlyForDay(weather.hourly, selectedPeriod));
-  }, [weather, selectedPeriod]);
+    return analyzeTimeBlocks(getHourlyForDay(weather.hourly, selectedPeriod, tz), tz);
+  }, [weather, selectedPeriod, tz]);
 
   const verdict = useMemo(() => {
     if (!weather || !selectedPeriod) return null;
-    return analyzeDayVerdict(selectedPeriod, getHourlyForDay(weather.hourly, selectedPeriod));
-  }, [weather, selectedPeriod]);
+    return analyzeDayVerdict(selectedPeriod, getHourlyForDay(weather.hourly, selectedPeriod, tz), tz);
+  }, [weather, selectedPeriod, tz]);
 
   const bestBlock = useMemo(() => {
     if (!blocks.length) return null;
@@ -639,6 +647,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               showAds={showAds}
               todayStr={todayStr}
               tmrwStr={tmrwStr}
+              tz={tz}
               alert={topAlert}
               selectedPeriod={selectedPeriod}
               weather={weather}
@@ -672,13 +681,13 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
               {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="compact" />}
               <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
                 onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark} isCompact
-                todayStr={todayStr} tmrwStr={tmrwStr} />
+                todayStr={todayStr} tmrwStr={tmrwStr} tz={tz} />
               {/* Per-chunk breakdown — same data the medium/full views show as
                   full rows, condensed to one line so smaller widgets convey
                   the same "why" without losing functionality. */}
               <CompactBlockStrip blocks={blocks} isDark={isDark} />
               <p className={`text-[9px] ${m}`}>
-                Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                Updated {formatInTz(weather.generatedAt, tz, { hour: "numeric", minute: "2-digit" })}
               </p>
               {showAds && <AdSlot isDark={isDark} variant="compact" />}
               {showBranding && (
@@ -700,12 +709,18 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                   <Flag className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
                   <div className="min-w-0">
                     <p className="text-sm font-bold truncate">{name}</p>
-                    <p className={`text-[10px] ${m}`}>{holes}h{par ? ` · Par ${par}` : ""}</p>
+                    {(par || tzHint) && (
+                      <p className={`text-[10px] ${m}`}>
+                        {par ? `Par ${par}` : ""}
+                        {par && tzHint ? " · " : ""}
+                        {tzHint ? `Course time · ${tzHint}` : ""}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
                   onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
-                  todayStr={todayStr} tmrwStr={tmrwStr} />
+                  todayStr={todayStr} tmrwStr={tmrwStr} tz={tz} />
               </div>
               {/* Scrollable: alert + verdict + time blocks + footer */}
               <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
@@ -724,7 +739,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                 {blocks.map((block) => <BlockRow key={block.name} block={block} isDark={isDark} compact />)}
               </div>
               <p className={`text-center text-[10px] ${m}`}>
-                Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                Updated {formatInTz(weather.generatedAt, tz, { hour: "numeric", minute: "2-digit" })}
               </p>
               {showAds && <AdSlot isDark={isDark} />}
               {showBranding && (
@@ -746,17 +761,20 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                   <Flag className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
                   <div className="min-w-0">
                     <h1 className="text-base font-bold truncate">{name}</h1>
-                    <p className={`text-[11px] ${m}`}>{holes} holes{par ? ` · Par ${par}` : ""} · {weather.location}</p>
+                    <p className={`text-[11px] ${m}`}>
+                      {holes} holes{par ? ` · Par ${par}` : ""} · {weather.location}
+                      {tzHint ? ` · Course time · ${tzHint}` : ""}
+                    </p>
                   </div>
                 </div>
                 <DayTabRow weather={weather} dayPeriods={dayPeriods} selectedDayIndex={selectedDayIndex}
                   onSelectDay={(i) => { setSelectedDayIndex(i); trackInteraction(); }} isDark={isDark}
-                  todayStr={todayStr} tmrwStr={tmrwStr} />
+                  todayStr={todayStr} tmrwStr={tmrwStr} tz={tz} />
               </div>
               {/* Scrollable: selected day content */}
               <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
                 <p className={`text-xs ${m}`}>
-                  {new Date(selectedPeriod.startTime).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
+                  {formatInTz(selectedPeriod.startTime, tz, { weekday: "long", month: "long", day: "numeric" })}
                 </p>
                 {topAlert && <AlertBanner alert={topAlert} isDark={isDark} size="full" />}
                 <div className="flex items-center gap-3">
@@ -790,7 +808,7 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                   </p>
                 )}
                 <p className={`text-center text-[11px] ${m}`}>
-                  Updated {new Date(weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  Updated {formatInTz(weather.generatedAt, tz, { hour: "numeric", minute: "2-digit" })}
                 </p>
                 {showAds && <AdSlot isDark={isDark} />}
                 {showBranding && (

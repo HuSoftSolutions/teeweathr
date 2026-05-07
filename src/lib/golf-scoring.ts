@@ -7,6 +7,7 @@ import type {
   DangerLevel,
   RainChunk,
 } from "./types";
+import { dayKeyInTz, hourInTz } from "./course-time";
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -231,9 +232,9 @@ interface HourAnalysis {
   forecast: string;
 }
 
-function analyzeHours(hourlyPeriods: WeatherPeriod[]): HourAnalysis[] {
+function analyzeHours(hourlyPeriods: WeatherPeriod[], tz: string | undefined | null): HourAnalysis[] {
   return hourlyPeriods.map((p) => {
-    const hour = new Date(p.startTime).getHours();
+    const hour = hourInTz(p.startTime, tz);
     const score = calculateGolfConditions(p).score;
     const precip = p.probabilityOfPrecipitation?.value ?? 0;
     const { level: danger } = detectDanger(p.shortForecast);
@@ -351,7 +352,8 @@ function formatRainSummary(chunks: RainChunk[]): string {
 
 export function analyzeDayVerdict(
   dayPeriod: WeatherPeriod,
-  hourlyForDay: WeatherPeriod[]
+  hourlyForDay: WeatherPeriod[],
+  tz: string | undefined | null
 ): DayVerdict {
   // If we don't have hourly data, fall back to period-level analysis
   if (hourlyForDay.length === 0) {
@@ -371,7 +373,7 @@ export function analyzeDayVerdict(
     };
   }
 
-  const hours = analyzeHours(hourlyForDay);
+  const hours = analyzeHours(hourlyForDay, tz);
   const golfHours = hours.filter((h) => h.hour >= GOLF_START && h.hour <= GOLF_END);
   const windows = findPlayableWindows(hours);
   const bestWindow = windows.length > 0 ? windows[0] : null;
@@ -512,9 +514,13 @@ export function analyzeDayVerdict(
 
 // ─── Get hourly periods for a specific day ──────────────────────
 
-export function getHourlyForDay(allHourly: WeatherPeriod[], dayPeriod: WeatherPeriod): WeatherPeriod[] {
-  const dayDate = new Date(dayPeriod.startTime).toDateString();
-  return allHourly.filter((h) => new Date(h.startTime).toDateString() === dayDate);
+export function getHourlyForDay(
+  allHourly: WeatherPeriod[],
+  dayPeriod: WeatherPeriod,
+  tz: string | undefined | null
+): WeatherPeriod[] {
+  const dayKey = dayKeyInTz(dayPeriod.startTime, tz);
+  return allHourly.filter((h) => dayKeyInTz(h.startTime, tz) === dayKey);
 }
 
 // ─── Time Block Analysis ────────────────────────────────────────
@@ -540,10 +546,13 @@ const TIME_BLOCKS = [
   { name: "Afternoon", startHour: 14, endHour: 18, label: "2 PM – 6 PM" },
 ] as const;
 
-export function analyzeTimeBlocks(hourlyForDay: WeatherPeriod[]): TimeBlock[] {
+export function analyzeTimeBlocks(
+  hourlyForDay: WeatherPeriod[],
+  tz: string | undefined | null
+): TimeBlock[] {
   return TIME_BLOCKS.flatMap((block) => {
     const hours = hourlyForDay.filter((h) => {
-      const hr = new Date(h.startTime).getHours();
+      const hr = hourInTz(h.startTime, tz);
       return hr >= block.startHour && hr < block.endHour;
     });
 

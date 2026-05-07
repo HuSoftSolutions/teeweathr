@@ -1,37 +1,53 @@
 import { useState, useEffect, useCallback } from "react";
+import { todayKeyInTz } from "./course-time";
 
 /**
- * Tracks the current date string and fires a callback when the day changes.
+ * Tracks the current date in a *given* timezone — typically the course's
+ * timezone — and fires a callback when the day rolls over there. Returns
+ * an ISO day key like "2026-05-08" so callers can compare against
+ * `dayKeyInTz(period.startTime, tz)` directly.
+ *
+ * Returns "" until first client mount: SSR runs in UTC, so computing the
+ * initial value at render time would hydrate UTC into the client and
+ * mislabel "Today" / "Tomorrow" near the day boundary. Consumers must
+ * treat empty as "not-yet-known" — string comparisons just won't match,
+ * which gracefully suppresses the Today/Tomorrow badge until mount.
+ *
+ * Pass `tz` as `undefined` to fall back to the viewer's local zone (with
+ * a dev warning) — used pre-Phase-1 for courses still missing a timezone.
+ *
  * Handles:
- * - Midnight rollover (checks every 30s)
+ * - Midnight rollover at the course (checks every 30s)
  * - Tab regaining focus after being idle/background
  * - Device waking from sleep
+ * - Course tz changing (e.g. user picks a different course)
  */
-export function useCurrentDay(onDayChange?: () => void) {
-  const [today, setToday] = useState(() => new Date().toDateString());
+export function useCurrentDay(
+  tz: string | undefined | null,
+  onDayChange?: () => void
+) {
+  const [today, setToday] = useState("");
 
   const check = useCallback(() => {
-    const now = new Date().toDateString();
+    if (!tz) {
+      setToday("");
+      return;
+    }
+    const now = todayKeyInTz(tz);
     setToday((prev) => {
-      if (prev !== now) {
-        onDayChange?.();
-        return now;
-      }
-      return prev;
+      if (prev && prev !== now) onDayChange?.();
+      return now;
     });
-  }, [onDayChange]);
+  }, [tz, onDayChange]);
 
   useEffect(() => {
-    // Poll every 30 seconds for midnight rollover
+    check();
     const interval = setInterval(check, 30_000);
 
-    // Check on visibility change (tab comes back to foreground)
     const onVisibility = () => {
       if (document.visibilityState === "visible") check();
     };
     document.addEventListener("visibilitychange", onVisibility);
-
-    // Check on focus (window regains focus)
     window.addEventListener("focus", check);
 
     return () => {

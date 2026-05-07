@@ -19,6 +19,7 @@ export const DEMO_COURSE = {
   par: 72,
   city: "Pebble Beach",
   state: "CA",
+  timezone: "America/Los_Angeles",
 } as const;
 
 export function isDemoApiKey(apiKey: string | null | undefined): boolean {

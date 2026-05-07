@@ -186,8 +186,8 @@ function DayPicker({
   return (
     <div className="flex gap-1 overflow-x-auto pb-1">
       {days.map((d) => {
-        const dh = getHourlyForDay(hourly, d.period);
-        const v = analyzeDayVerdict(d.period, dh);
+        const dh = getHourlyForDay(hourly, d.period, undefined);
+        const v = analyzeDayVerdict(d.period, dh, undefined);
         const sel = d.index === selectedIndex;
         const date = new Date(d.period.startTime);
         const isToday = d.index === 0 || (d.index === 1 && !periods[0].isDaytime);
@@ -384,8 +384,8 @@ export default function DashboardLanding() {
       const res = await fetch(`/api/weather?lat=${course.lat.toFixed(4)}&lon=${course.lon.toFixed(4)}`);
       if (!res.ok) return null;
       const weather: WeatherData = await res.json();
-      const dh = getHourlyForDay(weather.hourly, weather.periods[0]);
-      const verdict = analyzeDayVerdict(weather.periods[0], dh);
+      const dh = getHourlyForDay(weather.hourly, weather.periods[0], undefined);
+      const verdict = analyzeDayVerdict(weather.periods[0], dh, undefined);
       return { course, weather, score: verdict.dayScore, verdict };
     } catch {
       return null;
@@ -512,12 +512,12 @@ export default function DashboardLanding() {
 
   const selectedVerdict = useMemo(() => {
     if (!selectedCourse || !selectedPeriod) return null;
-    return analyzeDayVerdict(selectedPeriod, getHourlyForDay(selectedCourse.weather.hourly, selectedPeriod));
+    return analyzeDayVerdict(selectedPeriod, getHourlyForDay(selectedCourse.weather.hourly, selectedPeriod, undefined), undefined);
   }, [selectedCourse, selectedPeriod]);
 
   const selectedDayHourly = useMemo(() => {
     if (!selectedCourse || !selectedPeriod) return [];
-    return getHourlyForDay(selectedCourse.weather.hourly, selectedPeriod);
+    return getHourlyForDay(selectedCourse.weather.hourly, selectedPeriod, undefined);
   }, [selectedCourse, selectedPeriod]);
 
   // ─── Sidebar lists ───────────────────────────────────────────

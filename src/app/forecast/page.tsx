@@ -9,6 +9,8 @@ import {
   calculateGolfConditions, analyzeDayVerdict, getHourlyForDay, getGrade, getScoreColor, analyzeTimeBlocks,
   type TimeBlock,
 } from "@/lib/golf-scoring";
+import { dayKeyInTz, formatInTz, hourInTz, tomorrowKeyInTz, tzShortLabel } from "@/lib/course-time";
+import { useViewerTz } from "@/lib/use-viewer-tz";
 import {
   Wind, Thermometer, CloudRain, Sun, Cloud, CloudSun,
   MapPin, Search, Flag, CircleAlert, RefreshCw,
@@ -126,24 +128,28 @@ function BlockRow({ block }: { block: TimeBlock }) {
 
 // ─── Day Tab ────────────────────────────────────────────────────
 
-function DayTab({ period, hourly, isSelected, onClick, todayStr }: {
+function DayTab({ period, hourly, isSelected, onClick, todayStr, tmrwStr, tz }: {
   period: WeatherPeriod; hourly: WeatherPeriod[];
-  isSelected: boolean; onClick: () => void; todayStr: string;
+  isSelected: boolean; onClick: () => void;
+  todayStr: string; tmrwStr: string; tz: string | undefined | null;
 }) {
-  const dayHourly = getHourlyForDay(hourly, period);
-  const blocks = analyzeTimeBlocks(dayHourly);
+  const dayHourly = getHourlyForDay(hourly, period, tz);
+  const blocks = analyzeTimeBlocks(dayHourly, tz);
   const hasHourly = blocks.length > 0;
 
   const best = hasHourly
     ? Math.max(...blocks.map((b) => b.score))
     : calculateGolfConditions(period).score;
   const grade = getGrade(best);
-  const date = new Date(period.startTime);
-  const isToday = date.toDateString() === todayStr;
-  const tomorrow = new Date(new Date(todayStr).getTime() + 86400000).toDateString();
-  const isTomorrow = date.toDateString() === tomorrow;
-  const dayLabel = isToday ? "Today" : isTomorrow ? "Tomorrow" : date.toLocaleDateString([], { weekday: "short" });
-  const dateLabel = date.toLocaleDateString([], { month: "short", day: "numeric" });
+  const periodKey = dayKeyInTz(period.startTime, tz);
+  const isToday = !!todayStr && periodKey === todayStr;
+  const isTomorrow = !!tmrwStr && periodKey === tmrwStr;
+  const dayLabel = isToday
+    ? "Today"
+    : isTomorrow
+      ? "Tomorrow"
+      : formatInTz(period.startTime, tz, { weekday: "short" });
+  const dateLabel = formatInTz(period.startTime, tz, { month: "short", day: "numeric" });
   const hasRain = hasHourly
     ? blocks.some((b) => b.rain && b.precip.peak >= 40)
     : (period.probabilityOfPrecipitation?.value ?? 0) >= 40;
@@ -175,6 +181,13 @@ function CoursePicker({ courses, selected, onSelect, isFavorite, onToggleFavorit
   onSearch: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  // "Course time: PST" hint — only shown when the viewer is in a different
+  // tz than the course, so a traveler doesn't get confused about why
+  // "8 AM Morning" doesn't match their watch.
+  const viewerTz = useViewerTz();
+  const courseTz = selected.course.timezone;
+  const showTzHint = !!viewerTz && !!courseTz && viewerTz !== courseTz;
+  const tzLabel = showTzHint ? tzShortLabel(courseTz) : "";
 
   return (
     <div className="relative">
@@ -191,6 +204,11 @@ function CoursePicker({ courses, selected, onSelect, isFavorite, onToggleFavorit
               : selected.weather.location}</span>
             {selected.course.distance !== undefined && (
               <span className="font-mono">· {selected.course.distance} mi</span>
+            )}
+            {tzLabel && (
+              <span className="ml-1 px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-medium text-zinc-400 normal-case">
+                Course time · {tzLabel}
+              </span>
             )}
           </div>
         </div>
@@ -212,8 +230,10 @@ function CoursePicker({ courses, selected, onSelect, isFavorite, onToggleFavorit
                   onClick={() => { onSelect(cw); setOpen(false); }}>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-zinc-200 truncate">{cw.course.name}</p>
-                    <p className="text-[11px] text-zinc-500">
-                      {cw.course.distance !== undefined && `${cw.course.distance} mi · `}{cw.course.holes}h
+                    <p className="text-[11px] text-zinc-500 truncate">
+                      {cw.course.distance !== undefined && `${cw.course.distance} mi`}
+                      {cw.course.distance !== undefined && (cw.course.city || cw.course.state) && " · "}
+                      {[cw.course.city, cw.course.state].filter(Boolean).join(", ")}
                     </p>
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(cw.course); }}
@@ -319,8 +339,8 @@ function CourseRow({ course, onSelect, isFav, onToggleFav }: {
       <div className="flex-1 min-w-0" onClick={onSelect}>
         <p className="text-sm text-zinc-200 truncate">{course.name}</p>
         <p className="text-[11px] text-zinc-500">
-          {course.holes}h{course.par ? ` · Par ${course.par}` : ""}
-          {course.city ? ` · ${course.city}` : ""}{course.state ? `, ${course.state}` : ""}
+          {course.par ? `Par ${course.par}` : ""}
+          {course.par && course.city ? " · " : ""}{course.city || ""}{course.city && course.state ? `, ${course.state}` : course.state || ""}
           {course.distance !== undefined && ` · ${course.distance} mi`}
         </p>
       </div>
@@ -345,11 +365,14 @@ export default function Home() {
   const { favorites, isFavorite, toggleFavorite, loaded: favsLoaded } = useFavorites();
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Re-fetch weather when the day rolls over or tab regains focus after idle
-  const todayStr = useCurrentDay(useCallback(() => {
+  // Re-fetch weather when the day rolls over (in the *course's* tz, not
+  // the viewer's) or when the tab regains focus after idle.
+  const tz = selected?.course.timezone;
+  const todayStr = useCurrentDay(tz, useCallback(() => {
     setRefreshKey((k) => k + 1);
     setInitialDaySet(false);
   }, []));
+  const tmrwStr = useMemo(() => (tz ? tomorrowKeyInTz(tz) : ""), [tz]);
 
   const fetchCourse = useCallback(async (course: GolfCourse): Promise<CourseWeather | null> => {
     try {
@@ -459,10 +482,12 @@ export default function Home() {
     init();
   }, [favsLoaded, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Default to tomorrow if past playing hours
+  // Default to tomorrow if past playing hours (in the *course's* tz, so a
+  // golfer planning a 7 AM tee in PST from an EST device still gets the
+  // right "today" default).
   useEffect(() => {
     if (!selected || initialDaySet) return;
-    const hour = new Date().getHours();
+    const hour = hourInTz(new Date(), tz);
     let nextIdx = 0;
     if (hour >= 18) {
       const tomorrowIdx = selected.weather.periods.findIndex((p, i) => i > 0 && p.isDaytime);
@@ -472,7 +497,7 @@ export default function Home() {
       if (nextIdx) setSelectedDayIndex(nextIdx);
       setInitialDaySet(true);
     });
-  }, [selected, initialDaySet]);
+  }, [selected, initialDaySet, tz]);
 
   const handleSearchSelect = useCallback(async (course: GolfCourse) => {
     setLoading(true); setSelectedDayIndex(0);
@@ -496,13 +521,13 @@ export default function Home() {
 
   const blocks = useMemo(() => {
     if (!selected || !selectedPeriod) return [];
-    return analyzeTimeBlocks(getHourlyForDay(selected.weather.hourly, selectedPeriod));
-  }, [selected, selectedPeriod]);
+    return analyzeTimeBlocks(getHourlyForDay(selected.weather.hourly, selectedPeriod, tz), tz);
+  }, [selected, selectedPeriod, tz]);
 
   const verdict = useMemo(() => {
     if (!selected || !selectedPeriod) return null;
-    return analyzeDayVerdict(selectedPeriod, getHourlyForDay(selected.weather.hourly, selectedPeriod));
-  }, [selected, selectedPeriod]);
+    return analyzeDayVerdict(selectedPeriod, getHourlyForDay(selected.weather.hourly, selectedPeriod, tz), tz);
+  }, [selected, selectedPeriod, tz]);
 
   const bestBlock = useMemo(() => {
     if (!blocks.length) return null;
@@ -568,13 +593,13 @@ export default function Home() {
               hourly={selected.weather.hourly}
               isSelected={d.index === selectedDayIndex}
               onClick={() => setSelectedDayIndex(d.index)}
-              todayStr={todayStr} />
+              todayStr={todayStr} tmrwStr={tmrwStr} tz={tz} />
           ))}
         </div>
 
         {/* Selected date */}
         <p className="text-xs text-zinc-500 mb-4">
-          {new Date(selectedPeriod.startTime).toLocaleDateString([], {
+          {formatInTz(selectedPeriod.startTime, tz, {
             weekday: "long", month: "long", day: "numeric",
           })}
         </p>
@@ -638,7 +663,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="text-center text-[11px] text-zinc-700">
-          Weather: National Weather Service · {new Date(selected.weather.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          Weather: National Weather Service · {formatInTz(selected.weather.generatedAt, tz, { hour: "numeric", minute: "2-digit" })}
         </footer>
       </div>
 

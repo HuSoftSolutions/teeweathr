@@ -63,8 +63,9 @@ export function LiveTry() {
   }
 
   const today = result?.weather.periods.find((p) => p.isDaytime);
-  const blocks = result && today ? analyzeTimeBlocks(getHourlyForDay(result.weather.hourly, today)) : [];
-  const verdict = result && today ? analyzeDayVerdict(today, getHourlyForDay(result.weather.hourly, today)) : null;
+  const tz = result?.course.timezone;
+  const blocks = result && today ? analyzeTimeBlocks(getHourlyForDay(result.weather.hourly, today, tz), tz) : [];
+  const verdict = result && today ? analyzeDayVerdict(today, getHourlyForDay(result.weather.hourly, today, tz), tz) : null;
   const best = blocks.length ? blocks.reduce((a, b) => (b.score > a.score ? b : a)) : null;
   const score = best?.score ?? verdict?.dayScore ?? 0;
   const grade = getGrade(score);
@@ -96,7 +97,6 @@ export function LiveTry() {
                   <p className="text-sm text-zinc-800 truncate">{c.name}</p>
                   <p className="text-[11px] text-zinc-500 truncate">
                     {[c.city, c.state].filter(Boolean).join(", ") || "—"}
-                    {c.holes ? ` · ${c.holes}h` : ""}
                   </p>
                 </div>
               </button>

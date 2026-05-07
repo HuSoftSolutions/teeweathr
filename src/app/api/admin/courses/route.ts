@@ -6,6 +6,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { EMBED_CONFIG_TAG } from "@/app/api/embed/[apiKey]/route";
 import { verifySession } from "@/lib/firebase/session";
 import { getPlaceDetails, slugifyCourseName } from "@/lib/places";
+import { fetchNwsPoints } from "@/lib/nws-points";
 import { logger } from "@/lib/logger";
 
 async function requireAdmin(): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
       courseId = `${baseSlug}-${place.placeId.slice(-6).toLowerCase()}`;
     }
 
+    const nws = await fetchNwsPoints(place.lat, place.lon);
     await db.collection("courses").doc(courseId).set({
       name: place.name,
       lat: place.lat,
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
       formattedAddress: place.formattedAddress,
       placeId: place.placeId,
       placeTypes: place.types,
+      timezone: nws?.timeZone ?? null,
       featured: !!body.featured,
       claimStatus: "unclaimed",
       source: "places",
@@ -116,12 +119,14 @@ export async function POST(request: NextRequest) {
     const slug = slugifyCourseName(name);
     const courseId = `${slug}-${state?.toLowerCase() || "us"}`;
 
+    const nws = await fetchNwsPoints(lat, lon);
     await db.collection("courses").doc(courseId).set({
       name,
       city: city || "",
       state: state || "",
       lat,
       lon,
+      timezone: nws?.timeZone ?? null,
       holes: holes ?? null,
       par: par ?? null,
       style: style ?? null,

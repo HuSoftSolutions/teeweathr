@@ -76,12 +76,12 @@ function HeroCard({
   }, [weather.periods, selectedDayIndex]);
 
   const dayHourly = useMemo(
-    () => getHourlyForDay(weather.hourly, selectedPeriod),
+    () => getHourlyForDay(weather.hourly, selectedPeriod, undefined),
     [weather.hourly, selectedPeriod]
   );
 
   const dayVerdict = useMemo(
-    () => analyzeDayVerdict(selectedPeriod, dayHourly),
+    () => analyzeDayVerdict(selectedPeriod, dayHourly, undefined),
     [selectedPeriod, dayHourly]
   );
 
@@ -187,8 +187,8 @@ function HeroCard({
                 const date = new Date(p.startTime);
                 const isToday = i === 0;
                 const label = isToday ? "Today" : date.toLocaleDateString([], { weekday: "short" });
-                const dh = getHourlyForDay(weather.hourly, p);
-                const dv = analyzeDayVerdict(p, dh);
+                const dh = getHourlyForDay(weather.hourly, p, undefined);
+                const dv = analyzeDayVerdict(p, dh, undefined);
                 const sel = i === selectedDayIndex;
                 return (
                   <button
@@ -438,8 +438,8 @@ export default function Landing3() {
       const res = await fetch(`/api/weather?lat=${course.lat.toFixed(4)}&lon=${course.lon.toFixed(4)}`);
       if (!res.ok) return null;
       const weather: WeatherData = await res.json();
-      const dh = getHourlyForDay(weather.hourly, weather.periods[0]);
-      const verdict = analyzeDayVerdict(weather.periods[0], dh);
+      const dh = getHourlyForDay(weather.hourly, weather.periods[0], undefined);
+      const verdict = analyzeDayVerdict(weather.periods[0], dh, undefined);
       return { course, weather, score: verdict.dayScore, verdict };
     } catch {
       return null;
