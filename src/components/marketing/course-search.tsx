@@ -43,7 +43,8 @@ export function CourseSearch() {
   }, [query]);
 
   function navigate(course: GolfCourse) {
-    const url = `/forecast?lat=${course.lat}&lon=${course.lon}&name=${encodeURIComponent(course.name)}`;
+    const tzParam = course.timezone ? `&tz=${encodeURIComponent(course.timezone)}` : "";
+    const url = `/forecast?lat=${course.lat}&lon=${course.lon}&name=${encodeURIComponent(course.name)}${tzParam}`;
     router.push(url);
   }
 

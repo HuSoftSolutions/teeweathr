@@ -544,6 +544,9 @@ const TIME_BLOCKS = [
   { name: "Morning", startHour: 6, endHour: 10, label: "6 AM – 10 AM" },
   { name: "Midday", startHour: 10, endHour: 14, label: "10 AM – 2 PM" },
   { name: "Afternoon", startHour: 14, endHour: 18, label: "2 PM – 6 PM" },
+  // Evening covers post-storm clearing and summer twilight play. Rendered
+  // only when hourly data exists for these hours (NWS sometimes truncates).
+  { name: "Evening", startHour: 18, endHour: 21, label: "6 PM – 9 PM" },
 ] as const;
 
 export function analyzeTimeBlocks(

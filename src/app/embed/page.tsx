@@ -8,7 +8,7 @@ import {
   analyzeTimeBlocks, type TimeBlock,
 } from "@/lib/golf-scoring";
 import { useCurrentDay } from "@/lib/use-current-day";
-import { dayKeyInTz, formatInTz, hourInTz, tomorrowKeyInTz, tzShortLabel } from "@/lib/course-time";
+import { dayKeyInTz, formatInTz, hourInTz, todayKeyInTz, tomorrowKeyInTz, tzShortLabel } from "@/lib/course-time";
 import { useViewerTz } from "@/lib/use-viewer-tz";
 import {
   Wind, CloudRain, Sun, Cloud, CloudSun, Flag,
@@ -531,10 +531,26 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
       if (!wRes.ok) throw new Error();
       const data: WeatherData = await wRes.json();
       setWeather(data);
-      if (hourInTz(new Date(), tz) >= 18) {
-        const tmrwIdx = data.periods.findIndex((p, i) => i > 0 && p.isDaytime);
-        if (tmrwIdx > 0) setSelectedDayIndex(tmrwIdx);
+      // Default-day pick. NWS frequently returns "Tonight" (the previous
+      // night period) at index 0, so a naive selectedDayIndex=0 would
+      // show yesterday's night period instead of today's daytime forecast.
+      // Pick the first daytime period that matches today in the course's
+      // tz; past 6 PM, jump to tomorrow's daytime.
+      const periods = data.periods;
+      const hour = hourInTz(new Date(), tz);
+      const todayKey = todayKeyInTz(tz);
+      const todayDaytimeIdx = periods.findIndex(
+        (p) => p.isDaytime && dayKeyInTz(p.startTime, tz) === todayKey
+      );
+      const firstDaytimeIdx = periods.findIndex((p) => p.isDaytime);
+      let nextIdx: number;
+      if (hour >= 18 && todayDaytimeIdx >= 0) {
+        const after = periods.findIndex((p, i) => i > todayDaytimeIdx && p.isDaytime);
+        nextIdx = after >= 0 ? after : todayDaytimeIdx;
+      } else {
+        nextIdx = todayDaytimeIdx >= 0 ? todayDaytimeIdx : firstDaytimeIdx;
       }
+      if (nextIdx >= 0) setSelectedDayIndex(nextIdx);
       // Alerts are best-effort — silently fall back to no banner on failure.
       if (aRes.ok) {
         const alertData: { alerts?: WeatherAlert[] } = await aRes.json();
@@ -802,11 +818,15 @@ export default function EmbedPage({ searchParams }: { searchParams: Promise<Reco
                     </div>
                   )}
                 </div>
-                {bestBlock && bestBlock.score >= 30 && (
+                {verdict.bestWindow ? (
+                  <p className={`text-center text-xs ${m}`}>
+                    Best: <span className={isDark ? "text-zinc-300" : "text-zinc-700"}>{verdict.bestWindow.startLabel}–{verdict.bestWindow.endLabel}</span> ({getGrade(verdict.bestWindow.avgScore).letter})
+                  </p>
+                ) : bestBlock && bestBlock.score >= 30 ? (
                   <p className={`text-center text-xs ${m}`}>
                     Best: <span className={isDark ? "text-zinc-300" : "text-zinc-700"}>{bestBlock.name}</span> ({bestBlock.label})
                   </p>
-                )}
+                ) : null}
                 <p className={`text-center text-[11px] ${m}`}>
                   Updated {formatInTz(weather.generatedAt, tz, { hour: "numeric", minute: "2-digit" })}
                 </p>

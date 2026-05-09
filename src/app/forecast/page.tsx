@@ -9,7 +9,7 @@ import {
   calculateGolfConditions, analyzeDayVerdict, getHourlyForDay, getGrade, getScoreColor, analyzeTimeBlocks,
   type TimeBlock,
 } from "@/lib/golf-scoring";
-import { dayKeyInTz, formatInTz, hourInTz, tomorrowKeyInTz, tzShortLabel } from "@/lib/course-time";
+import { dayKeyInTz, formatInTz, hourInTz, todayKeyInTz, tomorrowKeyInTz, tzShortLabel } from "@/lib/course-time";
 import { useViewerTz } from "@/lib/use-viewer-tz";
 import {
   Wind, Thermometer, CloudRain, Sun, Cloud, CloudSun,
@@ -402,11 +402,13 @@ export default function Home() {
           loc = { lat: latNum, lon: lonNum };
           setUserLocation(loc);
           if (nameParam) {
+            const tzParam = sp.get("tz") || undefined;
             urlCourse = {
               id: `url-${latNum.toFixed(4)}-${lonNum.toFixed(4)}`,
               name: nameParam,
               lat: latNum,
               lon: lonNum,
+              timezone: tzParam,
             } as GolfCourse;
           }
         }
@@ -482,19 +484,38 @@ export default function Home() {
     init();
   }, [favsLoaded, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Default to tomorrow if past playing hours (in the *course's* tz, so a
-  // golfer planning a 7 AM tee in PST from an EST device still gets the
-  // right "today" default).
+  // Re-run the default-day pick whenever the user switches courses, so
+  // each course gets its own correct "today daytime" landing instead of
+  // inheriting the previous course's chosen day.
+  useEffect(() => {
+    setInitialDaySet(false);
+  }, [selected?.course.id]);
+
+  // Default-day selection. NWS frequently returns "Tonight" (yesterday's
+  // night period) at index 0 when the upstream cache was generated in the
+  // evening, so a naive `selectedDayIndex = 0` lands on a night period
+  // and renders yesterday's date in the header. Always pick the first
+  // *daytime* period for today (in the course's tz); past 6 PM, jump to
+  // tomorrow's daytime since the round window is over.
   useEffect(() => {
     if (!selected || initialDaySet) return;
+    const periods = selected.weather.periods;
     const hour = hourInTz(new Date(), tz);
-    let nextIdx = 0;
-    if (hour >= 18) {
-      const tomorrowIdx = selected.weather.periods.findIndex((p, i) => i > 0 && p.isDaytime);
-      if (tomorrowIdx > 0) nextIdx = tomorrowIdx;
+    const todayKey = todayKeyInTz(tz);
+    const todayDaytimeIdx = periods.findIndex(
+      (p) => p.isDaytime && dayKeyInTz(p.startTime, tz) === todayKey
+    );
+    const firstDaytimeIdx = periods.findIndex((p) => p.isDaytime);
+    let nextIdx: number;
+    if (hour >= 18 && todayDaytimeIdx >= 0) {
+      const after = periods.findIndex((p, i) => i > todayDaytimeIdx && p.isDaytime);
+      nextIdx = after >= 0 ? after : todayDaytimeIdx;
+    } else {
+      nextIdx = todayDaytimeIdx >= 0 ? todayDaytimeIdx : firstDaytimeIdx;
     }
+    if (nextIdx < 0) nextIdx = 0;
     queueMicrotask(() => {
-      if (nextIdx) setSelectedDayIndex(nextIdx);
+      setSelectedDayIndex(nextIdx);
       setInitialDaySet(true);
     });
   }, [selected, initialDaySet, tz]);
@@ -654,12 +675,20 @@ export default function Home() {
         </div>
 
         {/* Recommendation */}
-        {bestBlock && bestBlock.score >= 30 && (
+        {/* Use verdict.bestWindow (rolling 3-hour scan) so this matches the
+            verdict headline. Falling back to bestBlock for the rare case
+            where there's no hourly data and only block aggregates exist. */}
+        {verdict.bestWindow ? (
+          <div className="text-center text-sm text-zinc-500 mb-8">
+            Best window: <span className="text-zinc-300 font-medium">{verdict.bestWindow.startLabel}–{verdict.bestWindow.endLabel}</span>
+            {' — rated '}<span className="text-zinc-300 font-medium">{getGrade(verdict.bestWindow.avgScore).letter}</span>
+          </div>
+        ) : bestBlock && bestBlock.score >= 30 ? (
           <div className="text-center text-sm text-zinc-500 mb-8">
             Best window: <span className="text-zinc-300 font-medium">{bestBlock.name}</span> ({bestBlock.label})
             {bestBlock.rain && <span> — {bestBlock.rain.toLowerCase()}</span>}
           </div>
-        )}
+        ) : null}
 
         {/* Footer */}
         <footer className="text-center text-[11px] text-zinc-700">
